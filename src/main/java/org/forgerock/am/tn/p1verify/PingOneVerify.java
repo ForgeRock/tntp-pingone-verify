@@ -21,8 +21,8 @@ import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 
-import com.sun.identity.authentication.callbacks.HiddenValueCallback;
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
+import org.forgerock.json.JsonValue;
 import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import javax.security.auth.callback.TextOutputCallback;
 import com.google.common.collect.ImmutableList;
@@ -31,6 +31,7 @@ import org.forgerock.openam.auth.node.api.*;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.sm.annotations.adapters.Password;
 import org.forgerock.util.i18n.PreferredLocales;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +46,8 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Objects;
 import java.util.ResourceBundle;
 
@@ -55,7 +58,7 @@ import static org.forgerock.openam.auth.node.api.Action.send;
  * permitted to use zero-page login headers.
  */
 @Node.Metadata(outcomeProvider  = PingOneVerify.OutcomeProvider.class,
-               configClass      = PingOneVerify.Config.class)
+        configClass      = PingOneVerify.Config.class)
 public class PingOneVerify extends AbstractDecisionNode {
 
     private final Logger logger = LoggerFactory.getLogger(PingOneVerify.class);
@@ -85,6 +88,8 @@ public class PingOneVerify extends AbstractDecisionNode {
     public String p1AccessToken;
     public String verificationUrl;
     public String verifiedClaims;
+    public String verifyStatus;
+
 
     /**
      * Configuration for the node.
@@ -127,6 +132,24 @@ public class PingOneVerify extends AbstractDecisionNode {
             return FlowType.REGISTRATION;
         }
         @Attribute(order = 280)
+        default boolean saveVerifiedClaims() { return true; }
+
+        @Attribute(order = 300)
+        default Map<String, String> attributeMappingConfiguration() {
+            return new HashMap<String, String>() {{
+                /*key is id_token key value is ldap attribute name,
+                value is the claim name in PingOneVerify verified claims*/
+                put("givenName", "firstName");
+                put("sn", "lastName");
+                put("cn", "firstName");
+                put("postalAddress", "address");
+                put("country", "country");
+                put("idNumber", "idNumberAttribute");
+                put("expirationDate", "expirationDateAttribute");
+            }};
+        }
+
+        @Attribute(order = 320)
         default boolean fuzzyMatching() { return false; }
     }
 
@@ -145,18 +168,26 @@ public class PingOneVerify extends AbstractDecisionNode {
 
     @Override
     public Action process(TreeContext context) {
-    	try {
+        NodeState ns = context.getStateFor(this);
+
+        try {
             logger.debug(loggerPrefix + "Started");
-            NodeState ns = context.getStateFor(this);
 
             if (!ns.isDefined("verifyStage")) {
                 ns.putShared("verifyStage", 0);
                 ns.putShared("counter", 0);
             }
 
+            int a=2;
+            if(a==1) {
+                String exampleData = "{\"verifiedUserData\": {\"address\": \"70 WEBB STREET, NEWSTEAD VILLAGE, NOTTINGHAM, NG15 0BH\",\"birthDate\": \"1978-04-03\",\"country\": \"GBR\",\"expirationDate\": \"2029-12-19\",\"firstName\": \"MR MARCIN JERZY\",\"fullName\": \"MR MARCIN JERZY ZIMNY\",\"idNumber\": \"ZIMNY704038MJ9YD12\",\"idType\": \"[DriversLicenseFront, DriversLicenseBack]\",\"issueDate\": \"2019-12-20\",\"lastName\": \"ZIMNY\"}}";
+                verifiedClaimsToSharedState(ns,exampleData);
+                return Action.goTo("error").build();
+            }
+
+
             if (config.userNotificationChoice() && ns.get("verifyStage").asInteger() < 2) {
                 /* user is allowed to choose delivery method*/
-                //if (!context.hasCallbacks()) {
                 if (ns.get("verifyStage").asInteger() == 0) {
                     /* we haven't asked the user yet */
                     String[] options = {"Email", "SMS", "QR Code"};
@@ -180,13 +211,10 @@ public class PingOneVerify extends AbstractDecisionNode {
 
             if (ns.get("verifyStage").asInteger() == 2) {
                 /*starting the verification procedure*/
-                String userId = config.userId();
-                String clientSecret = new String(config.clientSecret());
-
-                p1AccessToken = getAccessToken(getTokenEndpointUrl(), config.clientId(), clientSecret);
                 String telephoneNumber = null;
                 String emailAddress = null;
-
+                String clientSecret = new String(config.clientSecret());
+                p1AccessToken = getAccessToken(getTokenEndpointUrl(), config.clientId(), clientSecret);
                 if (p1AccessToken.substring(0, 4) == "error") {
                     logger.debug(loggerPrefix + "Failed to obtain PingOne service access token");
                     ns.putShared("PingOneProtectTokenError", "Failed to obtain access token for PingOne Protect");
@@ -209,39 +237,24 @@ public class PingOneVerify extends AbstractDecisionNode {
                     //qr
                     ns.putShared("verifyStage", 4);
                 }
-                
+                /* create PingOne Verify transaction */
                 String verifyTxBody = createTransactionCallBody(config.verifyPolicyId(), telephoneNumber, emailAddress);
                 String verifyTxResponse = createVerifyTransaction(p1AccessToken, getVerifyEndpointUrl(), verifyTxBody);
                 if (Objects.equals(verifyTxResponse.substring(0,4), "error")) {
-
-                        ns.putShared("PingOneTransactionError", verifyTxResponse);
-                        return Action.goTo("error").build();
+                    ns.putShared("PingOneTransactionError", verifyTxResponse);
+                    return Action.goTo("error").build();
                 }
-
                 JSONObject obj = new JSONObject(verifyTxResponse);
-                //String txId = obj.getJSONObject("id").getString("level");
+                //txId = "0e3eb07c-d418-490a-8c36-e04b6fd39a15";
+                //verificationCode  = "122345";
                 txId = obj.getString("id");
                 ns.putShared("PingOneVerifyTxId",txId);
                 verificationCode = obj.getString("webVerificationCode");
-
-
-                //txId = "0e3eb07c-d418-490a-8c36-e04b6fd39a15";
-                //verificationCode  = "122345";
                 ns.putShared("PingOneVerifyTxId",txId);
-
+                /* this could be derived from API response (webVerificationUrl) */
                 verificationUrl = "https://apps.pingone.eu/" + config.envId() + "/verify/verify-webapp/v2/index.html?txnid=" +
                         txId + "&url=https://api.pingone.eu/v1/idValidations/webVerifications&code=" + verificationCode +
                         "&envId=" + config.envId();
-
-                //https://apps.pingone.eu/
-                // fe6b5f5c-1ae1-4172-968e-5ed671ad7860/
-                // verify/verify-webapp/v2/index.html
-                // ?txnid=65f08cac-baba-4651-a574-984884428ba6
-                // &url=https://api.pingone.eu/v1/idValidations/webVerifications
-                // &code=321426
-                // &envId=fe6b5f5c-1ae1-4172-968e-5ed671ad7860
-                // &source=email_798012
-
             }
 
             if (ns.get("verifyStage").asInteger() == 3) {
@@ -249,15 +262,44 @@ public class PingOneVerify extends AbstractDecisionNode {
                 int count = ns.get("counter").asInteger();
                 ns.putShared("counter", ++count);
                 String message = "Interval: " + String.valueOf(count);
-                if (count < 4) {
-                    TextOutputCallback textOutputCallback = new TextOutputCallback(TextOutputCallback.INFORMATION, "Please continue verification on your mobile device");
+                int verifyResult = 2;
+                if(count>3) {
+                    /*wait for 15 seconds before we start checking for result*/
+                    String accessToken = ns.get("PingOneAccessToken").asString();
+                    String verifyTxId = ns.get("PingOneVerifyTxId").asString();
+                    String sResult = getVerifyResult(accessToken, getVerifyEndpointUrl(),verifyTxId );
+                    if (!Objects.equals(sResult.substring(0,4), "error")) {
+                        verifyResult = checkVerifyResult(sResult);
+                    }
+                }
+
+                if (count < 45 && verifyResult==2) {
+                    TextOutputCallback textOutputCallback = new TextOutputCallback(TextOutputCallback.INFORMATION, "Please continue verification on your mobile device. Your verification code is: " + verificationCode);
                     PollingWaitCallback waitCallback =
                             new PollingWaitCallback("5000", message);
                     Callback[] callbacks = new Callback[]{textOutputCallback, waitCallback};
                     return send(callbacks).build();
                 } else {
-                    //verification process timed out
-                    return Action.goTo("error").build();
+                    if(verifyResult==1) {
+                        /* PingOne Verify returned SUCCESS */
+                        if(onResultSuccess(ns)){
+                            ns.putShared("PingOneAccessToken","");
+                            ns.putShared("counter",0);
+                            return Action.goTo("success").build();
+                        }
+                        else {
+                            ns.putShared("PingOneAccessToken","");
+                            ns.putShared("counter",0);
+                            return Action.goTo("fail").build();
+                        }
+                    }
+                    else {
+                        /* Time out */
+                        ns.putShared("PingOneAccessToken","");
+                        ns.putShared("PingOneVerifyClaims",verifiedClaims);
+                        ns.putShared("PingOneVerifyStatus",verifyStatus);
+                        return Action.goTo("fail").build();
+                    }
                 }
             }
 
@@ -266,21 +308,20 @@ public class PingOneVerify extends AbstractDecisionNode {
                 int count = ns.get("counter").asInteger();
                 ns.putShared("counter", ++count);
                 String message = "Interval: " + String.valueOf(count);
-                int vResult = 2;
+                int verifyResult = 2;
 
-                if(count>1) {
+                if(count>3) {
                     /*wait for 15 seconds before we start checking for result*/
                     String accessToken = ns.get("PingOneAccessToken").asString();
                     String verifyTxId = ns.get("PingOneVerifyTxId").asString();
                     //String verifyTxId = "bc706a80-df9e-4fa9-8ce1-8e567f8fc22e";
                     String sResult = getVerifyResult(accessToken, getVerifyEndpointUrl(),verifyTxId );
                     if (!Objects.equals(sResult.substring(0,4), "error")) {
-                        vResult = checkVerifyResult(sResult);
+                        verifyResult = checkVerifyResult(sResult);
                     }
-
                 }
-
-                if (count < 40 && vResult==2) {
+                if (count < 45 && verifyResult==2) {
+                    /* waiting for verification success/fail for 5 mins (just under) */
                     String clientSideScriptExecutorFunction = createQrCodeScript(verificationUrl);
                     TextOutputCallback textOutputCallback = new TextOutputCallback(TextOutputCallback.INFORMATION, "Please scan the QR code to continue verification process. Your verification code is: " + verificationCode + ", txId:" + txId);
                     PollingWaitCallback waitCallback =
@@ -290,73 +331,82 @@ public class PingOneVerify extends AbstractDecisionNode {
                     Callback[] callbacks = new Callback[]{textOutputCallback, waitCallback, scriptAndSelfSubmitCallback};
                     return send(callbacks).build();
                 } else {
-                    if(vResult==1) {
-                        ns.putShared("PingOneVerifyClaims",verifiedClaims);
-                        ns.putShared("PingOneAccessToken","");
-                        ns.putShared("counter","0");
-                        return Action.goTo("success").build();
+                    if(verifyResult==1) {
+                        /* PingOne Verify returned SUCCESS */
+                        if(onResultSuccess(ns)){
+                            ns.putShared("PingOneAccessToken","");
+                            ns.putShared("counter",0);
+                            return Action.goTo("success").build();
+                        }
+                        else {
+                            ns.putShared("PingOneAccessToken","");
+                            ns.putShared("counter",0);
+                            return Action.goTo("fail").build();
+                        }
                     }
                     else {
+                        /* Time out */
                         ns.putShared("PingOneAccessToken","");
                         ns.putShared("PingOneVerifyClaims",verifiedClaims);
+                        ns.putShared("PingOneVerifyStatus",verifyStatus);
                         return Action.goTo("fail").build();
                     }
                 }
             }
-
-
-
-           /*
-            if(!context.hasCallbacks() && a==1 ) {
-                String userId = config.userId();
-                String clientSecret = new String(config.clientSecret());
-                //String tokenEndpoint = "https://api.pingone." + getVerifyRegion(config.verifyRegion()) + "/" + config.envId() + "/as/token/";
-                //String verifyEndpoint = "https://api.pingone." + getVerifyRegion(config.verifyRegion()) + "/v1/environments/" + config.envId() + "/users/" + config.userId() + "/verifyTransactions";
-                String accessToken = getAccessToken(getTokenEndpointUrl(), config.clientId(), clientSecret);
-                String telephoneNumber = null;
-                String emailAddress = null;
-
-                if(accessToken=="error"){
-                    logger.debug(loggerPrefix + "Failed to obtain PingOne service access token");
-                    ns.putShared("PingOneProtectTokenError","Failed to obtain access token for PingOne Protect");
-                    return Action.goTo("error").build();
-                }
-                String verifyTxBody = createTransactionCallBody(config.verifyPolicyId(), telephoneNumber, emailAddress);
-                String verifyTxResponse = createVerifyTransaction(accessToken, getVerifyEndpointUrl(), verifyTxBody);
-
-                if(verifyTxResponse.substring(0,4)=="error"){
-                    ns.putShared("PingOneTransactionError", verifyTxResponse);
-                    return Action.goTo("error").build();
-                }
-                int selection = ns.get("PingOneVerifySelection").asInteger();
-            }
-
-            if(ns.isDefined("counter")) {
-                int count = ns.get("counter").asInteger();
-                ns.putShared("counter", ++count);
-                String message = "Interval: " + String.valueOf(count);
-                if (count < 4) {
-                    PollingWaitCallback waitCallback =
-                            new PollingWaitCallback("2000", message);
-                    Callback[] callbacks = new Callback[]{waitCallback};
-                    return send(callbacks).build();
-                }
-            }*/
-
-
-
-
+            /* if we're here, something went wrong */
             return Action.goTo("error").build();
-
         }
-    	catch (Exception ex) {
+        catch (Exception ex) {
             String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
             logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
             context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
             context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
             return Action.goTo("error").build();
         }
-        //return Action.goTo("success").build();
+    }
+    public boolean onResultSuccess(NodeState ns) {
+        if(config.saveVerifiedClaims()) {
+            /* save verified claims to SharedState (config) */
+            ns.putShared("PingOneVerifyClaims",verifiedClaims);
+        }
+        if(Objects.equals(getFlowType(config.flowType()), "VERIFICATION")) {
+            /* checking if the objectAttributes match the verified claims*/
+            if(validateVerifiedClaims(ns,verifiedClaims)) {
+                /* check successful*/
+                return true;
+            } else {
+                /* checks failed*/
+                return false;
+            }
+        } else {
+            /* for REGISTRATION no checks are needed
+            but we are mapping claims to objectAttributes */
+            verifiedClaimsToSharedState(ns,verifiedClaims);
+            return true;
+        }
+    }
+
+    public boolean validateVerifiedClaims(NodeState ns, String verifiedClaims) {
+        /* verification procedure here */
+        return true; //placeholder
+    }
+
+    public boolean verifiedClaimsToSharedState(NodeState ns, String verifiedClaims) {
+        /* Mapping verified claims (based on the map in config to objectAttributes */
+        JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
+        JSONArray keys = attributeMap.names();
+        JsonValue objectAttributes;
+        objectAttributes = ns.get("objectAttributes");
+        JSONObject dataJson = new JSONObject(verifiedClaims);
+        for (int i = 0; i < keys.length (); i++) {
+            String key = keys.getString (i);
+            String value = attributeMap.getString (key);
+            if(dataJson.has(value)){
+                objectAttributes.put(key, dataJson.get(value));
+            }
+        }
+        ns.putShared("objectAttributes",objectAttributes);
+        return true;
     }
 
     public static String createQrCodeScript(String url) {
@@ -393,13 +443,10 @@ public class PingOneVerify extends AbstractDecisionNode {
             conn.setDoInput(true);
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-
             conn.setRequestMethod("POST");
-
             OutputStream os = conn.getOutputStream();
             os.write(body.getBytes("UTF-8"));
             os.close();
-
             if(conn.getResponseCode()==201){
                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                 String inputLine;
@@ -438,6 +485,7 @@ public class PingOneVerify extends AbstractDecisionNode {
             } else if (Objects.equals(result, "FAIL")) {
                 if(obj.has("verifiedUserData")) {
                     verifiedClaims = obj.getJSONObject("verifiedUserData").toString();
+                    verifyStatus = obj.getJSONObject("transactionStatus").getJSONObject("verificationStatus").toString();
                 }
                 return 0; /*failed*/
             }
@@ -462,9 +510,7 @@ public class PingOneVerify extends AbstractDecisionNode {
             conn.setDoInput(true);
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-
             conn.setRequestMethod("GET");
-
             if(conn.getResponseCode()==200){
                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                 String inputLine;
@@ -500,7 +546,6 @@ public class PingOneVerify extends AbstractDecisionNode {
         else {
             body = body + "}";
         }
-
         return body;
     }
     public static String getAccessToken(String endpoint, String client_id, String client_secret) {
@@ -515,7 +560,6 @@ public class PingOneVerify extends AbstractDecisionNode {
             conn.setRequestMethod("POST");
             String body = "grant_type=client_credentials&client_id=" + client_id +
                     "&client_secret=" + client_secret + "&scope=default";
-
             OutputStream os = conn.getOutputStream();
             os.write(body.getBytes("UTF-8"));
             os.close();
@@ -528,7 +572,6 @@ public class PingOneVerify extends AbstractDecisionNode {
                     response.append(inputLine);
                 }
                 in.close();
-
                 JSONObject obj = new JSONObject(response.toString());
                 String accessToken = obj.getString("access_token");
                 return accessToken;
