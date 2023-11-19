@@ -180,8 +180,12 @@ public class PingOneVerify extends AbstractDecisionNode {
 
             int a=2;
             if(a==1) {
-                String exampleData = "{\"verifiedUserData\": {\"address\": \"70 WEBB STREET, NEWSTEAD VILLAGE, NOTTINGHAM, NG15 0BH\",\"birthDate\": \"1978-04-03\",\"country\": \"GBR\",\"expirationDate\": \"2029-12-19\",\"firstName\": \"MR MARCIN JERZY\",\"fullName\": \"MR MARCIN JERZY ZIMNY\",\"idNumber\": \"ZIMNY704038MJ9YD12\",\"idType\": \"[DriversLicenseFront, DriversLicenseBack]\",\"issueDate\": \"2019-12-20\",\"lastName\": \"ZIMNY\"}}";
-                verifiedClaimsToSharedState(ns,exampleData);
+                if(ns.get("objectAttributes").get("mail").asString()!=null) {
+                    ns.putShared("debug-objAttr",ns.get("objectAttributes"));
+                }
+                else {
+                    ns.putShared("debug-objAttr","no object attr");
+                }
                 return Action.goTo("error").build();
             }
 
@@ -227,10 +231,26 @@ public class PingOneVerify extends AbstractDecisionNode {
                 int verifyDeliveryMethod = ns.get("PingOneVerifySelection").asInteger();
                 if (verifyDeliveryMethod == 0) {
                     //email
-                    emailAddress = ns.get("objectAttributes").get("mail").asString();
-                    ns.putShared("verifyStage", 3);
+                    if(ns.get("objectAttributes").get("mail").asString()!=null &&
+                            ns.get("objectAttributes").get("mail").asString()!="" ) {
+                        emailAddress = ns.get("objectAttributes").get("mail").asString();
+                        ns.putShared("verifyStage", 3);
+                    }
+                    else {
+                        ns.putShared("PingOneVerify-Error","mail attribute missing in sharedState objectAttributes");
+                        return Action.goTo("error").build();
+                    }
                 } else if (verifyDeliveryMethod == 1) {
                     //sms
+                    if(ns.get("objectAttributes").get("telephoneNumber").asString()!=null &&
+                            ns.get("objectAttributes").get("telephoneNumber").asString()!="") {
+                        emailAddress = ns.get("objectAttributes").get("telephoneNumber").asString();
+                        ns.putShared("verifyStage", 3);
+                    }
+                    else {
+                        ns.putShared("PingOneVerify-Error","Telephone number attribute missing in sharedState objectAttributes");
+                        return Action.goTo("error").build();
+                    }
                     telephoneNumber = ns.get("objectAttributes").get("telephoneNumber").asString();
                     ns.putShared("verifyStage", 3);
                 } else if (verifyDeliveryMethod == 2) {
