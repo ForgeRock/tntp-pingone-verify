@@ -230,7 +230,7 @@ public class PingOneVerify extends AbstractDecisionNode {
 
                 int verifyDeliveryMethod = ns.get("PingOneVerifySelection").asInteger();
                 if (verifyDeliveryMethod == 0) {
-                    //email
+                    /* email */
                     if(ns.get("objectAttributes").get("mail").asString()!=null &&
                             ns.get("objectAttributes").get("mail").asString()!="" ) {
                         emailAddress = ns.get("objectAttributes").get("mail").asString();
@@ -241,18 +241,16 @@ public class PingOneVerify extends AbstractDecisionNode {
                         return Action.goTo("error").build();
                     }
                 } else if (verifyDeliveryMethod == 1) {
-                    //sms
+                    /* sms */
                     if(ns.get("objectAttributes").get("telephoneNumber").asString()!=null &&
                             ns.get("objectAttributes").get("telephoneNumber").asString()!="") {
-                        emailAddress = ns.get("objectAttributes").get("telephoneNumber").asString();
+                        telephoneNumber = ns.get("objectAttributes").get("telephoneNumber").asString();
                         ns.putShared("verifyStage", 3);
                     }
                     else {
                         ns.putShared("PingOneVerify-Error","Telephone number attribute missing in sharedState objectAttributes");
                         return Action.goTo("error").build();
                     }
-                    telephoneNumber = ns.get("objectAttributes").get("telephoneNumber").asString();
-                    ns.putShared("verifyStage", 3);
                 } else if (verifyDeliveryMethod == 2) {
                     //qr
                     ns.putShared("verifyStage", 4);
