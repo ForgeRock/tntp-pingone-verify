@@ -21,7 +21,9 @@ import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 
+import com.iplanet.sso.SSOException;
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
+import com.sun.identity.idm.IdRepoException;
 import org.forgerock.json.JsonValue;
 import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import javax.security.auth.callback.TextOutputCallback;
@@ -31,6 +33,14 @@ import org.forgerock.openam.auth.node.api.*;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.sm.annotations.adapters.Password;
 import org.forgerock.util.i18n.PreferredLocales;
+
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
+import org.forgerock.openam.core.CoreWrapper;
+
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -45,11 +55,6 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Objects;
-import java.util.ResourceBundle;
 
 import static org.forgerock.openam.auth.node.api.Action.send;
 
@@ -63,7 +68,7 @@ public class PingOneVerify extends AbstractDecisionNode {
 
     private final Logger logger = LoggerFactory.getLogger(PingOneVerify.class);
     private final Config config;
-    private String loggerPrefix = "[Web3Auth Node]" + PingOneVerifyPlugin.logAppender;
+    private final String loggerPrefix = "[Web3Auth Node]" + PingOneVerifyPlugin.logAppender;
     private static final String BUNDLE = PingOneVerify.class.getName();
     public enum VerifyRegion { EU, US, APAC, CANADA }
     public String getVerifyRegion(VerifyRegion verifyRegion) {
@@ -89,6 +94,7 @@ public class PingOneVerify extends AbstractDecisionNode {
     public String verificationUrl;
     public String verifiedClaims;
     public String verifyStatus;
+    private final CoreWrapper coreWrapper;
 
 
     /**
@@ -141,15 +147,22 @@ public class PingOneVerify extends AbstractDecisionNode {
                 value is the claim name in PingOneVerify verified claims*/
                 put("givenName", "firstName");
                 put("sn", "lastName");
-                put("cn", "firstName");
+                put("cn", "fullName");
                 put("postalAddress", "address");
                 put("country", "country");
-                put("idNumber", "idNumberAttribute");
-                put("expirationDate", "expirationDateAttribute");
+                put("birthDateAttribute", "birthDate");
+                put("idNumberAttribute", "idNumber");
+                put("idTypeAttribute", "idType");
+                put("expirationDateAttribute", "expirationDate");
             }};
         }
-
         @Attribute(order = 320)
+        List<String> attributesToMatch();
+        @Attribute(order = 340)
+        default String firstNameAttribute() {
+            return "givenName";
+        }
+        @Attribute(order = 360)
         default boolean fuzzyMatching() { return false; }
     }
 
@@ -162,14 +175,14 @@ public class PingOneVerify extends AbstractDecisionNode {
      * @param realm The realm the node is in.
      */
     @Inject
-    public PingOneVerify(@Assisted Config config, @Assisted Realm realm) {
+    public PingOneVerify(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper) {
+        this.coreWrapper = coreWrapper;
         this.config = config;
     }
 
     @Override
     public Action process(TreeContext context) {
         NodeState ns = context.getStateFor(this);
-
         try {
             logger.debug(loggerPrefix + "Started");
 
@@ -180,12 +193,13 @@ public class PingOneVerify extends AbstractDecisionNode {
 
             int a=2;
             if(a==1) {
-                if(ns.get("objectAttributes").get("mail").asString()!=null) {
-                    ns.putShared("debug-objAttr",ns.get("objectAttributes"));
-                }
-                else {
-                    ns.putShared("debug-objAttr","no object attr");
-                }
+                //String realm = context.sharedState.get(SharedStateConstants.REALM).asString();
+                ns.putShared("username","marcin");
+                String vcs = "{\"lastName\": \"ZIMNY\",\"firstName\": \"MR MARCIN\",\"telephoneNumber\": \"+447990560059\"}";
+                boolean res = validateVerifiedClaims(ns, vcs);
+                ns.putShared("result_bool",res);
+
+
                 return Action.goTo("error").build();
             }
 
@@ -279,7 +293,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                 /*sms and email*/
                 int count = ns.get("counter").asInteger();
                 ns.putShared("counter", ++count);
-                String message = "Interval: " + String.valueOf(count);
+                String message = "Interval: " + count;
                 int verifyResult = 2;
                 if(count>3) {
                     /*wait for 15 seconds before we start checking for result*/
@@ -325,7 +339,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                 /*qr code*/
                 int count = ns.get("counter").asInteger();
                 ns.putShared("counter", ++count);
-                String message = "Interval: " + String.valueOf(count);
+                String message = "Interval: " + count;
                 int verifyResult = 2;
 
                 if(count>3) {
@@ -382,20 +396,16 @@ public class PingOneVerify extends AbstractDecisionNode {
             return Action.goTo("error").build();
         }
     }
-    public boolean onResultSuccess(NodeState ns) {
+    public boolean onResultSuccess(NodeState ns) throws IdRepoException, SSOException {
         if(config.saveVerifiedClaims()) {
             /* save verified claims to SharedState (config) */
             ns.putShared("PingOneVerifyClaims",verifiedClaims);
         }
         if(Objects.equals(getFlowType(config.flowType()), "VERIFICATION")) {
             /* checking if the objectAttributes match the verified claims*/
-            if(validateVerifiedClaims(ns,verifiedClaims)) {
-                /* check successful*/
-                return true;
-            } else {
-                /* checks failed*/
-                return false;
-            }
+            /* check successful*/
+            /* checks failed*/
+            return validateVerifiedClaims(ns, verifiedClaims);
         } else {
             /* for REGISTRATION no checks are needed
             but we are mapping claims to objectAttributes */
@@ -404,9 +414,57 @@ public class PingOneVerify extends AbstractDecisionNode {
         }
     }
 
-    public boolean validateVerifiedClaims(NodeState ns, String verifiedClaims) {
+    public String dsAttributeToVerifiedClaim (String dsAttribute) {
+        JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
+        return attributeMap.get(dsAttribute).toString();
+    }
+    public boolean validateVerifiedClaims(NodeState ns, String claims) throws IdRepoException, SSOException {
         /* verification procedure here */
-        return true; //placeholder
+        List<String> requiredAttributes = config.attributesToMatch();
+        String userName = ns.get(USERNAME).asString();
+        String realm = ns.get(REALM).asString();
+        StringBuilder dsUserAttributes = new StringBuilder();
+        int matchedAttributes = 0;
+        boolean fuzzyMatch = config.fuzzyMatching();
+
+        /* make a map for all required attributes (names) */
+        Set<String> uas = new HashSet<String>();
+        for (int i = 0; i < requiredAttributes.size(); i++) {
+            uas.add(requiredAttributes.get(i));
+        }
+        /* get user attributes from ds */
+        Map dsAttributesMap = null;
+        dsAttributesMap = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm).getAttributes(uas);
+        JSONObject dsMapTempJson = new JSONObject(dsAttributesMap);
+        JSONObject userAttributesDsJson = new JSONObject();
+        /* attributes are returned as array, need to transform */
+        for (int i = 0; i < requiredAttributes.size(); i++) {
+            String value = dsMapTempJson.get(requiredAttributes.get(i)).toString();
+            value = value.replaceAll("[\\[\\]\\\"]", "");
+            userAttributesDsJson.put(requiredAttributes.get(i),value);
+        }
+        //ns.putShared("debug-userAttributesDsJson", userAttributesDsJson.toString());
+
+        JSONObject userAttributesVcJson = new JSONObject(claims);
+
+        /* compare the attributes */
+        for(int i=0; i<requiredAttributes.size(); i++) {
+            String dsAttr, vcAttr = "";
+            dsAttr = userAttributesDsJson.get(requiredAttributes.get(i)).toString();
+            vcAttr = userAttributesVcJson.get(dsAttributeToVerifiedClaim(requiredAttributes.get(i))).toString();
+            if(Objects.equals(dsAttr.toUpperCase(), vcAttr.toUpperCase())) {
+                matchedAttributes++;
+            } else {
+                if(Objects.equals(requiredAttributes.get(i), config.firstNameAttribute()) && fuzzyMatch) {
+                    /* search for givenName in vc attribute */
+                    if(vcAttr.toUpperCase().contains(dsAttr.toUpperCase())) {
+                        matchedAttributes++;
+                    }
+                }
+            }
+        }
+
+        return requiredAttributes.size() == matchedAttributes;
     }
 
     public boolean verifiedClaimsToSharedState(NodeState ns, String verifiedClaims) {
@@ -463,7 +521,7 @@ public class PingOneVerify extends AbstractDecisionNode {
             conn.setRequestProperty("Authorization", "Bearer " + accessToken);
             conn.setRequestMethod("POST");
             OutputStream os = conn.getOutputStream();
-            os.write(body.getBytes("UTF-8"));
+            os.write(body.getBytes(StandardCharsets.UTF_8));
             os.close();
             if(conn.getResponseCode()==201){
                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
@@ -474,7 +532,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                 in.close();
                 return response.toString();
             } else {
-                String responseError = "error:" + String.valueOf(conn.getResponseCode());
+                String responseError = "error:" + conn.getResponseCode();
                 return responseError;
             }
         } catch (MalformedURLException e) {
@@ -538,7 +596,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                 in.close();
                 return response.toString();
             } else {
-                String responseError = "error:" + String.valueOf(conn.getResponseCode());
+                String responseError = "error:" + conn.getResponseCode();
                 return responseError;
             }
         } catch (MalformedURLException e) {
@@ -579,7 +637,7 @@ public class PingOneVerify extends AbstractDecisionNode {
             String body = "grant_type=client_credentials&client_id=" + client_id +
                     "&client_secret=" + client_secret + "&scope=default";
             OutputStream os = conn.getOutputStream();
-            os.write(body.getBytes("UTF-8"));
+            os.write(body.getBytes(StandardCharsets.UTF_8));
             os.close();
 
             if(conn.getResponseCode()==200) {
@@ -594,7 +652,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                 String accessToken = obj.getString("access_token");
                 return accessToken;
             } else {
-                String responseError = "error:" + String.valueOf(conn.getResponseCode());
+                String responseError = "error:" + conn.getResponseCode();
                 return responseError;
             }
         } catch (MalformedURLException e) {
