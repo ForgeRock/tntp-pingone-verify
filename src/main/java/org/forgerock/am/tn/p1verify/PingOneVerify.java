@@ -15,36 +15,9 @@
  */
 package org.forgerock.am.tn.p1verify;
 
-import javax.inject.Inject;
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.ConfirmationCallback;
-
-import com.iplanet.sso.SSOException;
-import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
-import com.sun.identity.idm.IdRepoException;
-import org.forgerock.json.JsonValue;
-import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
-import javax.security.auth.callback.TextOutputCallback;
-import com.google.common.collect.ImmutableList;
-import org.forgerock.openam.annotations.sm.Attribute;
-import org.forgerock.openam.auth.node.api.*;
-import org.forgerock.openam.core.realms.Realm;
-import org.forgerock.openam.sm.annotations.adapters.Password;
-import org.forgerock.util.i18n.PreferredLocales;
-
+import static org.forgerock.openam.auth.node.api.Action.send;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
-import org.forgerock.openam.core.CoreWrapper;
-
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import java.lang.String;
-import com.google.inject.assistedinject.Assisted;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -53,15 +26,50 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.ResourceBundle;
+import java.util.Set;
 
-import static org.forgerock.openam.auth.node.api.Action.send;
+import javax.inject.Inject;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.ConfirmationCallback;
+import javax.security.auth.callback.TextOutputCallback;
+
+import org.forgerock.json.JsonValue;
+import org.forgerock.openam.annotations.sm.Attribute;
+import org.forgerock.openam.auth.node.api.AbstractDecisionNode;
+import org.forgerock.openam.auth.node.api.Action;
+import org.forgerock.openam.auth.node.api.Node;
+import org.forgerock.openam.auth.node.api.NodeState;
+import org.forgerock.openam.auth.node.api.StaticOutcomeProvider;
+import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
+import org.forgerock.openam.core.CoreWrapper;
+import org.forgerock.openam.core.realms.Realm;
+import org.forgerock.openam.sm.annotations.adapters.Password;
+import org.forgerock.util.i18n.PreferredLocales;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableList;
+import com.google.inject.assistedinject.Assisted;
+import com.iplanet.sso.SSOException;
+import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
+import com.sun.identity.idm.IdRepoException;
 
 /**
  * A node that checks to see if zero-page login headers have specified username and whether that username is in a group
  * permitted to use zero-page login headers.
  */
 @Node.Metadata(outcomeProvider  = PingOneVerify.OutcomeProvider.class,
-        configClass      = PingOneVerify.Config.class)
+        configClass      = PingOneVerify.Config.class, tags = {"marketplace", "trustnetwork" })
 public class PingOneVerify extends AbstractDecisionNode {
 
     private final Logger logger = LoggerFactory.getLogger(PingOneVerify.class);
@@ -93,6 +101,9 @@ public class PingOneVerify extends AbstractDecisionNode {
     public String verifiedClaims;
     public String verifyStatus;
     private final CoreWrapper coreWrapper;
+    private static final String FAIL = "FAIL";
+	private static final String SUCCESS = "SUCCESS";
+	private static final String ERROR = "ERROR";
 
 
     /**
@@ -233,7 +244,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                     logger.debug(loggerPrefix + "Failed to obtain PingOne service access token");
                     ns.putShared("PingOneVerifyTokenError", "Failed to obtain access token for PingOne Verify");
                     ns.putShared("PingOneVerifyTokenErrorDebugResponseCode", p1AccessToken);
-                    return Action.goTo("error").build();
+                    return Action.goTo(ERROR).build();
                 } else {
                     ns.putShared("PingOneAccessToken",p1AccessToken);
                 }
@@ -259,7 +270,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                     }
                     else {
                         ns.putShared("PingOneVerify-Error","Telephone number attribute missing in sharedState objectAttributes");
-                        return Action.goTo("error").build();
+                        return Action.goTo(ERROR).build();
                     }
                 } else if (verifyDeliveryMethod == 2) {
                     //qr
@@ -270,7 +281,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                 String verifyTxResponse = createVerifyTransaction(p1AccessToken, getVerifyEndpointUrl(), verifyTxBody);
                 if (Objects.equals(verifyTxResponse.substring(0,4), "error")) {
                     ns.putShared("PingOneTransactionError", verifyTxResponse);
-                    return Action.goTo("error").build();
+                    return Action.goTo(ERROR).build();
                 }
                 JSONObject obj = new JSONObject(verifyTxResponse);
                 //txId = "0e3eb07c-d418-490a-8c36-e04b6fd39a15";
@@ -313,12 +324,12 @@ public class PingOneVerify extends AbstractDecisionNode {
                         if(onResultSuccess(ns)){
                             ns.putShared("PingOneAccessToken","");
                             ns.putShared("counter",0);
-                            return Action.goTo("success").build();
+                            return Action.goTo(SUCCESS).build();
                         }
                         else {
                             ns.putShared("PingOneAccessToken","");
                             ns.putShared("counter",0);
-                            return Action.goTo("fail").build();
+                            return Action.goTo(FAIL).build();
                         }
                     }
                     else {
@@ -326,7 +337,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                         ns.putShared("PingOneAccessToken","");
                         ns.putShared("PingOneVerifyClaims",verifiedClaims);
                         ns.putShared("PingOneVerifyStatus",verifyStatus);
-                        return Action.goTo("fail").build();
+                        return Action.goTo(FAIL).build();
                     }
                 }
             }
@@ -364,12 +375,12 @@ public class PingOneVerify extends AbstractDecisionNode {
                         if(onResultSuccess(ns)){
                             ns.putShared("PingOneAccessToken","");
                             ns.putShared("counter",0);
-                            return Action.goTo("success").build();
+                            return Action.goTo(SUCCESS).build();
                         }
                         else {
                             ns.putShared("PingOneAccessToken","");
                             ns.putShared("counter",0);
-                            return Action.goTo("fail").build();
+                            return Action.goTo(FAIL).build();
                         }
                     }
                     else {
@@ -377,7 +388,7 @@ public class PingOneVerify extends AbstractDecisionNode {
                         ns.putShared("PingOneAccessToken","");
                         ns.putShared("PingOneVerifyClaims",verifiedClaims);
                         ns.putShared("PingOneVerifyStatus",verifyStatus);
-                        return Action.goTo("fail").build();
+                        return Action.goTo(FAIL).build();
                     }
                 }
             }
@@ -389,7 +400,7 @@ public class PingOneVerify extends AbstractDecisionNode {
             logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
             context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
             context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
-            return Action.goTo("error").build();
+            return Action.goTo(ERROR).build();
         }
     }
     public boolean onResultSuccess(NodeState ns) throws IdRepoException, SSOException {
@@ -419,7 +430,7 @@ public class PingOneVerify extends AbstractDecisionNode {
         List<String> fuzzyMatchAttributes = config.attributesToFuzzyMatch();
         String userName = ns.get(USERNAME).asString();
         String realm = ns.get(REALM).asString();
-        StringBuilder dsUserAttributes = new StringBuilder();
+        //StringBuilder dsUserAttributes = new StringBuilder();
         int matchedAttributes = 0;
 
         /* make a map for all required attributes (names) */
@@ -673,9 +684,9 @@ public class PingOneVerify extends AbstractDecisionNode {
                     OutcomeProvider.class.getClassLoader());
 
             return ImmutableList.of(
-                    new Outcome("success", "success"),
-                    new Outcome("fail", "fail"),
-                    new Outcome("error", "error")
+                    new Outcome(SUCCESS, bundle.getString("successOutcome")),
+                    new Outcome(FAIL, bundle.getString("failOutcome")),
+                    new Outcome(ERROR, bundle.getString("errorOutcome"))
             );
         }
     }

@@ -60,8 +60,10 @@ import org.slf4j.LoggerFactory;
  */
 public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "0.0.1";
+	static private String currentVersion = "0.0.4";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
+	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyPlugin.class);
+	private String loggerPrefix = "[PingOneVerifyPlugin]" + PingOneVerifyPlugin.logAppender;
 	
     /** 
      * Specify the Map of list of node classes that the plugin is providing. These will then be installed and
@@ -109,6 +111,13 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
      */	
 	@Override
 	public void upgrade(String fromVersion) throws PluginException {
+		logger.error(loggerPrefix + "fromVersion = " + fromVersion);
+		logger.error(loggerPrefix + "currentVersion = " + currentVersion);
+		try {
+			pluginTools.upgradeAuthNode(PingOneVerify.class);
+		} catch (Exception e) {
+			throw new PluginException(e.getMessage());
+		}
 		super.upgrade(fromVersion);
 	}
 
