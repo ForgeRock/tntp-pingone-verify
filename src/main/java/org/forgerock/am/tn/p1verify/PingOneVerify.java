@@ -27,13 +27,7 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.ResourceBundle;
-import java.util.Set;
+import java.util.*;
 
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
@@ -42,17 +36,14 @@ import javax.security.auth.callback.TextOutputCallback;
 
 import org.forgerock.json.JsonValue;
 import org.forgerock.openam.annotations.sm.Attribute;
-import org.forgerock.openam.auth.node.api.AbstractDecisionNode;
-import org.forgerock.openam.auth.node.api.Action;
-import org.forgerock.openam.auth.node.api.Node;
-import org.forgerock.openam.auth.node.api.NodeState;
-import org.forgerock.openam.auth.node.api.StaticOutcomeProvider;
-import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.node.api.*;
 import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.sm.annotations.adapters.Password;
 import org.forgerock.util.i18n.PreferredLocales;
+import org.forgerock.openam.auth.node.api.OutcomeProvider;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -68,14 +59,14 @@ import com.sun.identity.idm.IdRepoException;
  * A node that checks to see if zero-page login headers have specified username and whether that username is in a group
  * permitted to use zero-page login headers.
  */
-@Node.Metadata(outcomeProvider  = PingOneVerify.OutcomeProvider.class,
+@Node.Metadata(outcomeProvider  = PingOneVerify.PingOneVerifyOutcomeProvider.class,
         configClass      = PingOneVerify.Config.class, tags = {"marketplace", "trustnetwork" })
-public class PingOneVerify extends AbstractDecisionNode {
+public class PingOneVerify implements Node {
 
     private final Logger logger = LoggerFactory.getLogger(PingOneVerify.class);
     private final Config config;
     private final String loggerPrefix = "[Web3Auth Node]" + PingOneVerifyPlugin.logAppender;
-    private static final String BUNDLE = PingOneVerify.class.getName();
+    public static final String BUNDLE = PingOneVerify.class.getName();
     public enum VerifyRegion { EU, US, APAC, CANADA }
     public String getVerifyRegion(VerifyRegion verifyRegion) {
         if (verifyRegion == VerifyRegion.EU) { return "eu";}
@@ -104,6 +95,8 @@ public class PingOneVerify extends AbstractDecisionNode {
     private static final String FAIL = "FAIL";
 	private static final String SUCCESS = "SUCCESS";
 	private static final String ERROR = "ERROR";
+    private static final String LOW_CONFIDENCE = "LOWCONFIDENCE";
+
 
 
     /**
@@ -677,8 +670,33 @@ public class PingOneVerify extends AbstractDecisionNode {
         }
         return "error";
     }
-    public static class OutcomeProvider implements StaticOutcomeProvider {
+    public static class PingOneVerifyOutcomeProvider implements OutcomeProvider {
         @Override
+        public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
+
+            ResourceBundle bundle = locales.getBundleInPreferredLocale(PingOneVerify.BUNDLE,
+                    OutcomeProvider.class.getClassLoader());
+
+            List<Outcome> results = new ArrayList<>();
+
+            if(nodeAttributes.get("attributesToFuzzyMatch").required().asList(String.class).isEmpty()) {
+                results.add(new Outcome(SUCCESS,  bundle.getString("successOutcome")));
+            }
+            else {
+                results.add(new Outcome(SUCCESS,  "success"));
+
+            }
+
+            results.add(new Outcome(FAIL, "fail"));
+            results.add(new Outcome(ERROR, "error"));
+
+            for (String s : nodeAttributes.get("attributesToFuzzyMatch").required().asList(String.class)) {
+                results.add(new Outcome(s, s));
+            }
+            return Collections.unmodifiableList(results);
+        }
+    }
+        /*
         public List<Outcome> getOutcomes(PreferredLocales locales) {
             ResourceBundle bundle = locales.getBundleInPreferredLocale(PingOneVerify.BUNDLE,
                     OutcomeProvider.class.getClassLoader());
@@ -689,5 +707,5 @@ public class PingOneVerify extends AbstractDecisionNode {
                     new Outcome(ERROR, bundle.getString("errorOutcome"))
             );
         }
-    }
+    }*/
 }
