@@ -75,6 +75,14 @@ public class PingOneVerify implements Node {
     }
     public enum UserNotification { QR, SMS, EMAIL }
     public enum FlowType { REGISTRATION, VERIFICATION }
+    public enum ConfidenceLevel { LOW, MEDIUM, HIGH }
+
+    public String getConfidenceLevel(ConfidenceLevel confidenceLevel) {
+        if (confidenceLevel == ConfidenceLevel.LOW) {return "LOW";}
+        else if (confidenceLevel == ConfidenceLevel.MEDIUM) {return "MEDIUM";}
+        else return "HIGH";
+    }
+
     public String getFlowType(FlowType flowType) {
         if (flowType == FlowType.REGISTRATION) {return "REGISTRATION";}
         else return "VERIFICATION";
@@ -98,6 +106,13 @@ public class PingOneVerify implements Node {
     private static final String LOW_CONFIDENCE = "LOW_CONFIDENCE";
     private static final String MEDIUM_CONFIDENCE = "MEDIUM_CONFIDENCE";
     private static final String HIGH_CONFIDENCE = "HIGH_CONFIDENCE";
+
+    public String ping2pingAttributeMap = "{\n" +
+            "  \"firstName\":\"given_name\",\n" +
+            "  \"lastName\" : \"family_name\",\n" +
+            "  \"address\" : \"address\",\n" +
+            "  \"birthDate\" : \"birth_date\"\n" +
+            "}";
 
 
 
@@ -141,6 +156,11 @@ public class PingOneVerify implements Node {
         default FlowType flowType() {
             return FlowType.REGISTRATION;
         }
+        @Attribute(order = 265)
+        default int timeOut() {
+            return 270;
+        }
+
         @Attribute(order = 280)
         default boolean saveVerifiedClaims() { return true; }
 
@@ -165,10 +185,9 @@ public class PingOneVerify implements Node {
         @Attribute(order = 340)
         List<String> attributesToFuzzyMatch();
         @Attribute(order = 360)
-        default String firstNameAttribute() {
-            return "givenName";
+        default ConfidenceLevel fuzzyMatchConfidenceLevel() {
+            return ConfidenceLevel.MEDIUM;
         }
-
     }
 
 
@@ -196,69 +215,6 @@ public class PingOneVerify implements Node {
                 ns.putShared("counter", 0);
             }
 
-            int a=2;
-            if(a==1) {
-                String syntheticData = "{\n" +
-                        "    \"_links\": {\n" +
-                        "        \"self\": {\n" +
-                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/8c38b5d4-028d-44dc-8502-6bf40fd86bc3/verifyTransactions/e6f63006-84f8-4556-857c-c3798c1a335c/verifiedData\"\n" +
-                        "        },\n" +
-                        "        \"user\": {\n" +
-                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/8c38b5d4-028d-44dc-8502-6bf40fd86bc3\"\n" +
-                        "        },\n" +
-                        "        \"environment\": {\n" +
-                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e\"\n" +
-                        "        },\n" +
-                        "        \"verifyTransaction\": {\n" +
-                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/8c38b5d4-028d-44dc-8502-6bf40fd86bc3/verifyTransactions/e6f63006-84f8-4556-857c-c3798c1a335c\"\n" +
-                        "        }\n" +
-                        "    },\n" +
-                        "    \"_embedded\": {\n" +
-                        "        \"verifiedData\": [\n" +
-                        "            {\n" +
-                        "                \"_links\": {\n" +
-                        "                    \"self\": {\n" +
-                        "                        \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/8c38b5d4-028d-44dc-8502-6bf40fd86bc3/verifyTransactions/e6f63006-84f8-4556-857c-c3798c1a335c/verifiedData/3b7fab64-1fb5-4197-b9d6-65ebd69e33c9\"\n" +
-                        "                    }\n" +
-                        "                },\n" +
-                        "                \"id\": \"3b7fab64-1fb5-4197-b9d6-65ebd69e33c9\",\n" +
-                        "                \"type\": \"GOVERNMENT_ID\",\n" +
-                        "                \"data\": {\n" +
-                        "                    \"address\": \"70 WEBB STREET, NEWSTEAD VILLAGE, NOTTINGHAM, NG15 0BH\",\n" +
-                        "                    \"birthDate\": \"1978-04-03\",\n" +
-                        "                    \"country\": \"GBR\",\n" +
-                        "                    \"expirationDate\": \"2029-12-19\",\n" +
-                        "                    \"firstName\": \"MR MARCIN JERZY\",\n" +
-                        "                    \"fullName\": \"MR MARCIN JERZY ZIMNY\",\n" +
-                        "                    \"idNumber\": \"ZIMNY704038MJ9YD12\",\n" +
-                        "                    \"idType\": \"[DriversLicenseFront, DriversLicenseBack]\",\n" +
-                        "                    \"issueDate\": \"2019-12-20\",\n" +
-                        "                    \"lastName\": \"ZIMNY\"\n" +
-                        "                },\n" +
-                        "                \"createdAt\": \"2023-11-29T20:47:55.855Z\"\n" +
-                        "            }\n" +
-                        "        ]\n" +
-                        "    },\n" +
-                        "    \"size\": 1\n" +
-                        "}";
-                JSONObject myJSON = new JSONObject(syntheticData);
-                String myString = myJSON.getJSONObject("_embedded").getJSONArray("verifiedData").get(0).toString();
-                myJSON = new JSONObject(myString);
-                myString = myJSON.getJSONObject("data").toString();
-                ns.putShared("debug-myString",myString);
-
-                //String realm = context.sharedState.get(SharedStateConstants.REALM).asString();
-                //getUserAttributesFromDS(ns);
-                //JSONObject myJsonObj = createFuzzyMatchingAttributeMapObject();
-                //String verifyTxBody = createTransactionCallBody(config.verifyPolicyId(), "+447990560059", "", createFuzzyMatchingAttributeMapObject());
-                //ns.putShared("debug-verifyTxBody", verifyTxBody);
-                /*
-                ns.putShared("username","marcin");
-                String vcs = "{\"lastName\": \"ZIMNY\",\"firstName\": \"MR MARCIN\",\"country\": \"PL\"}";
-                boolean res = validateVerifiedClaims(ns, vcs);
-                ns.putShared("result_bool",res);*/
-                return Action.goTo(ERROR).build();
-            }
 
             if (config.userNotificationChoice() && ns.get("verifyStage").asInteger() < 2) {
                 /* user is allowed to choose delivery method*/
@@ -336,7 +292,9 @@ public class PingOneVerify implements Node {
                     return Action.goTo(ERROR).build();
                 }
                 JSONObject obj = new JSONObject(verifyTxResponse);
-                //txId = "0e3eb07c-d418-490a-8c36-e04b6fd39a15";
+
+
+                //txId = "071c6219-3e33-467f-b88e-c9954e68c581";
                 //verificationCode  = "122345";
                 txId = obj.getString("id");
                 ns.putShared("PingOneVerifyTxId",txId);
@@ -353,6 +311,8 @@ public class PingOneVerify implements Node {
                 String verifyTxId = ns.get("PingOneVerifyTxId").asString();
 
                 int count = ns.get("counter").asInteger();
+                int timeOutCount = config.timeOut()/5;
+
                 ns.putShared("counter", ++count);
                 String message = "Interval: " + count;
                 int verifyResult = 2;
@@ -364,7 +324,7 @@ public class PingOneVerify implements Node {
                     }
                 }
 
-                if (count < 45 && verifyResult==2) {
+                if (count < timeOutCount && verifyResult==2) {
                     verificationCode = ns.get("PingOneVerificationCode").asString();
                     TextOutputCallback textOutputCallback = new TextOutputCallback(TextOutputCallback.INFORMATION, "Please continue verification on your mobile device. Your verification code is: " + verificationCode);
                     PollingWaitCallback waitCallback =
@@ -372,6 +332,11 @@ public class PingOneVerify implements Node {
                     Callback[] callbacks = new Callback[]{textOutputCallback, waitCallback};
                     return send(callbacks).build();
                 } else {
+                    /* clean sharedState */
+                    ns.putShared("PingOneAccessToken","");
+                    ns.putShared("userAttributesDsJson","");
+                    ns.putShared("counter",0);
+
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
                         /* We need to fetch the verifiedData claims */
@@ -382,19 +347,12 @@ public class PingOneVerify implements Node {
                             return Action.goTo(FAIL).build();
                         }
                         if(onResultSuccess(ns)){
-                            ns.putShared("PingOneAccessToken","");
-                            ns.putShared("counter",0);
                             return Action.goTo(SUCCESS).build();
-                        }
-                        else {
-                            ns.putShared("PingOneAccessToken","");
-                            ns.putShared("counter",0);
+                        } else {
                             return Action.goTo(FAIL).build();
                         }
-                    }
-                    else {
+                    } else {
                         /* Time out */
-                        ns.putShared("PingOneAccessToken","");
                         ns.putShared("PingOneVerifyClaims",verifiedClaims);
                         ns.putShared("PingOneVerifyStatus",verifyStatus);
                         return Action.goTo(FAIL).build();
@@ -407,6 +365,8 @@ public class PingOneVerify implements Node {
                 String verifyTxId = ns.get("PingOneVerifyTxId").asString();
 
                 int count = ns.get("counter").asInteger();
+                int timeOutCount = config.timeOut()/5;
+
                 ns.putShared("counter", ++count);
                 String message = "Interval: " + count;
                 int verifyResult = 2;
@@ -419,7 +379,7 @@ public class PingOneVerify implements Node {
                         verifyResult = checkVerifyResult(sResult);
                     }
                 }
-                if (count < 45 && verifyResult==2) {
+                if (count < timeOutCount && verifyResult==2) {
                     /* waiting for verification success/fail for 5 mins (just under) */
                     verificationCode = ns.get("PingOneVerificationCode").asString();
                     String clientSideScriptExecutorFunction = createQrCodeScript(verificationUrl);
@@ -431,6 +391,11 @@ public class PingOneVerify implements Node {
                     Callback[] callbacks = new Callback[]{textOutputCallback, waitCallback, scriptAndSelfSubmitCallback};
                     return send(callbacks).build();
                 } else {
+                    /* clean sharedState */
+                    ns.putShared("PingOneAccessToken","");
+                    ns.putShared("userAttributesDsJson","");
+                    ns.putShared("counter",0);
+
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
                         /* We need to fetch the verifiedData claims */
@@ -441,19 +406,15 @@ public class PingOneVerify implements Node {
                             return Action.goTo(FAIL).build();
                         }
                         if(onResultSuccess(ns)){
-                            ns.putShared("PingOneAccessToken","");
-                            ns.putShared("counter",0);
                             return Action.goTo(SUCCESS).build();
                         }
                         else {
-                            ns.putShared("PingOneAccessToken","");
                             ns.putShared("counter",0);
                             return Action.goTo(FAIL).build();
                         }
                     }
                     else {
                         /* Time out */
-                        ns.putShared("PingOneAccessToken","");
                         ns.putShared("PingOneVerifyClaims",verifiedClaims);
                         ns.putShared("PingOneVerifyStatus",verifyStatus);
                         return Action.goTo(FAIL).build();
@@ -477,9 +438,9 @@ public class PingOneVerify implements Node {
             ns.putShared("PingOneVerifyClaims",verifiedClaims);
         }
         if(Objects.equals(getFlowType(config.flowType()), "VERIFICATION")) {
-            /* checking if the objectAttributes match the verified claims*/
-            /* check successful*/
-            /* checks failed*/
+            /* checking if the objectAttributes match the verified claims */
+            /* check successful */
+            /* checks failed */
             return validateVerifiedClaims(ns, verifiedClaims);
         } else {
             /* for REGISTRATION no checks are needed
@@ -492,6 +453,12 @@ public class PingOneVerify implements Node {
         JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
         return attributeMap.get(dsAttribute).toString();
     }
+
+    public String verifiedClaimAttributeToRequirementsAttribute (String vcAttribute) {
+        JSONObject attributeMap = new JSONObject(ping2pingAttributeMap);
+        return attributeMap.get(vcAttribute).toString();
+    }
+
     public JSONObject createFuzzyMatchingAttributeMapObject () {
         JSONObject attributeMapping = new JSONObject();
         if(config.attributesToFuzzyMatch().isEmpty()) {
@@ -513,7 +480,7 @@ public class PingOneVerify implements Node {
                 }
             }
             if(!Objects.equals(attrNameVC,"") && !Objects.equals(attrValue,"")) {
-                attributeMapping.put(attrNameVC,attrValue);
+                attributeMapping.put(verifiedClaimAttributeToRequirementsAttribute(attrNameVC),attrValue);
             }
         }
         return attributeMapping;
@@ -538,12 +505,42 @@ public class PingOneVerify implements Node {
             value = value.replaceAll("[\\[\\]\\\"]", "");
             userAttributesDsJson.put(requiredAttributes.get(i),value);
         }
+        ns.putShared("userAttributesDsJson",userAttributesDsJson.toString());
+    }
+    public int levelToNumber(String level) {
+        if(Objects.equals(level,"LOW")) {
+            return 0;
+        } else if (Objects.equals(level,"MEDIUM")) {
+            return 1;
+        } else {
+            return 2;
+        }
     }
     public boolean validateVerifiedClaims(NodeState ns, String claims) throws IdRepoException, SSOException {
         /* verification procedure here */
         List<String> requiredAttributes = config.attributesToMatch();
         List<String> fuzzyMatchAttributes = config.attributesToFuzzyMatch();
+        ns.putShared("debug-aaa",ns.get("userAttributesDsJson").asString());
+        userAttributesDsJson = new JSONObject(ns.get("userAttributesDsJson").asString());
 
+        String accessToken = ns.get("PingOneAccessToken").asString();
+        String verifyTxId = ns.get("PingOneVerifyTxId").asString();
+        String minConfidenceLevel = getConfidenceLevel(config.fuzzyMatchConfidenceLevel());
+
+        if(!fuzzyMatchAttributes.isEmpty()) {
+            String biographicData = getVerifyBiographicMetadata(accessToken, getVerifyEndpointUrl(), verifyTxId);
+            JSONObject biographicDataJSON = new JSONObject(biographicData);
+            JSONArray biographicDataJSONArray = biographicDataJSON.getJSONArray("biographic_match_results");
+            for (int i = 0; i < biographicDataJSONArray.length(); i++) {
+                JSONObject entry = biographicDataJSONArray.getJSONObject(i);
+                /* if the confidence level in the biographical match is lower than threshold= */
+                if (levelToNumber(entry.getString("match")) < levelToNumber(getConfidenceLevel(config.fuzzyMatchConfidenceLevel()))) {
+                    ns.putShared("PingOneVerifyBiographicMatch","below set confidence level");
+                    return false;
+                }
+            }
+            ns.putShared("debug-biographicMatching",biographicData);
+        }
         int matchedAttributes = 0;
 
         /* compare the attributes */
@@ -756,6 +753,55 @@ public class PingOneVerify implements Node {
         }
         return "error";
     }
+    public static String getVerifyBiographicMetadata(String accessToken, String endpoint, String vTxId) {
+        String resultEndpoint = endpoint + "/" + vTxId + "/metaData";
+        StringBuffer response = new StringBuffer();
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(resultEndpoint);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(4000);
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            conn.setRequestMethod("GET");
+            if(conn.getResponseCode()==200){
+                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                in.close();
+                String biographicMetaData = "";
+                JSONObject responseJSON = new JSONObject(response.toString());
+                JSONArray metaDataArray = responseJSON.getJSONObject("_embedded").getJSONArray("metaData");
+                for(int i=0; i<metaDataArray.length(); i++) {
+                    String entry = "";
+                    entry = metaDataArray.get(i).toString();
+                    JSONObject entryJSON = new JSONObject(entry);
+                    if(Objects.equals(entryJSON.get("type"),"BIOGRAPHIC_MATCH")) {
+                        biographicMetaData = entryJSON.getJSONObject("data").toString();
+                        i = metaDataArray.length();
+                    }
+                }
+                return biographicMetaData;
+            } else {
+                String responseError = "error:" + conn.getResponseCode();
+                return responseError;
+            }
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        finally {
+            if(conn!=null) {
+                conn.disconnect();
+            }
+        }
+        return "error";
+    }
     public static String createTransactionCallBody (String policyId, String telephoneNumber, String emailAddress, JSONObject fuzzyMatchingAttributes) {
         String body ="{\"verifyPolicy\": {\"id\":\"" + policyId + "\"}";
         if(telephoneNumber!="" && telephoneNumber!=null) {
@@ -833,6 +879,7 @@ public class PingOneVerify implements Node {
                     OutcomeProvider.class.getClassLoader());
 
             List<Outcome> results = new ArrayList<>();
+            /*
             if(nodeAttributes.get("attributesToFuzzyMatch").required().asList(String.class).isEmpty()) {
                 results.add(new Outcome(SUCCESS,  bundle.getString("successOutcome")));
             }
@@ -840,7 +887,9 @@ public class PingOneVerify implements Node {
                 results.add(new Outcome(HIGH_CONFIDENCE,  bundle.getString("confidenceHighOutcome")));
                 results.add(new Outcome(MEDIUM_CONFIDENCE,  bundle.getString("confidenceMediumOutcome")));
                 results.add(new Outcome(LOW_CONFIDENCE,  bundle.getString("confidenceLowOutcome")));
-            }
+            }*/
+
+            results.add(new Outcome(SUCCESS,  bundle.getString("successOutcome")));
             results.add(new Outcome(FAIL, bundle.getString("failOutcome")));
             results.add(new Outcome(ERROR, bundle.getString("errorOutcome")));
 
