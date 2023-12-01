@@ -75,13 +75,6 @@ public class PingOneVerify implements Node {
     }
     public enum UserNotification { QR, SMS, EMAIL }
     public enum FlowType { REGISTRATION, VERIFICATION }
-    public enum ConfidenceLevel { LOW, MEDIUM, HIGH }
-
-    public String getConfidenceLevel(ConfidenceLevel confidenceLevel) {
-        if (confidenceLevel == ConfidenceLevel.LOW) {return "LOW";}
-        else if (confidenceLevel == ConfidenceLevel.MEDIUM) {return "MEDIUM";}
-        else return "HIGH";
-    }
 
     public String getFlowType(FlowType flowType) {
         if (flowType == FlowType.REGISTRATION) {return "REGISTRATION";}
@@ -103,18 +96,14 @@ public class PingOneVerify implements Node {
     private static final String FAIL = "FAIL";
 	private static final String SUCCESS = "SUCCESS";
 	private static final String ERROR = "ERROR";
-    private static final String LOW_CONFIDENCE = "LOW_CONFIDENCE";
-    private static final String MEDIUM_CONFIDENCE = "MEDIUM_CONFIDENCE";
-    private static final String HIGH_CONFIDENCE = "HIGH_CONFIDENCE";
 
     public String ping2pingAttributeMap = "{\n" +
             "  \"firstName\":\"given_name\",\n" +
             "  \"lastName\" : \"family_name\",\n" +
+            "  \"fullName\" : \"name\",\n" +
             "  \"address\" : \"address\",\n" +
             "  \"birthDate\" : \"birth_date\"\n" +
             "}";
-
-
 
     /**
      * Configuration for the node.
@@ -160,15 +149,13 @@ public class PingOneVerify implements Node {
         default int timeOut() {
             return 270;
         }
-
         @Attribute(order = 280)
         default boolean saveVerifiedClaims() { return true; }
-
         @Attribute(order = 300)
         default Map<String, String> attributeMappingConfiguration() {
             return new HashMap<String, String>() {{
-                /*key is id_token key value is ldap attribute name,
-                value is the claim name in PingOneVerify verified claims*/
+                /* key is DS attribute name,
+                value is the claim name in PingOneVerify verified claims */
                 put("givenName", "firstName");
                 put("sn", "lastName");
                 put("cn", "fullName");
@@ -183,11 +170,19 @@ public class PingOneVerify implements Node {
         @Attribute(order = 320)
         List<String> attributesToMatch();
         @Attribute(order = 340)
-        List<String> attributesToFuzzyMatch();
-        @Attribute(order = 360)
-        default ConfidenceLevel fuzzyMatchConfidenceLevel() {
-            return ConfidenceLevel.MEDIUM;
+        default Map<String, String> fuzzyMatchingConfiguration() {
+            return new HashMap<String, String>() {{
+                /* key is DS attribute name,
+                value is the confidence level required for success */
+                put("givenName", "LOW");
+                put("sn", "HIGH");
+                put("address", "LOW");
+                put("cn", "MEDIUM");
+                put("birthDateAttribute", "MEDIUM");
+            }};
         }
+        @Attribute(order = 360)
+        default boolean attributeLookup() { return false; }
     }
 
 
@@ -214,7 +209,6 @@ public class PingOneVerify implements Node {
                 ns.putShared("verifyStage", 0);
                 ns.putShared("counter", 0);
             }
-
 
             if (config.userNotificationChoice() && ns.get("verifyStage").asInteger() < 2) {
                 /* user is allowed to choose delivery method*/
@@ -281,8 +275,16 @@ public class PingOneVerify implements Node {
                     ns.putShared("verifyStage", 4);
                 }
                 if(Objects.equals(getFlowType(config.flowType()), "VERIFICATION")) {
-                    /* pull all required attributes from DS */
-                    getUserAttributesFromDS(ns);
+                    /* pull all required attributes from objectAttributes or DS */
+                    if(config.attributeLookup()) {
+                        getUserAttributesFromDS(ns);
+                    } else {
+                        boolean result = getUserAttributesFromOA(ns);
+                        if(!result) {
+                            ns.putShared("PingOneVerifyMissingAttributesInSharedState","true");
+                            return Action.goTo(ERROR).build();
+                        }
+                    }
                 }
                 /* create PingOne Verify transaction */
                 String verifyTxBody = createTransactionCallBody(config.verifyPolicyId(), telephoneNumber, emailAddress, createFuzzyMatchingAttributeMapObject());
@@ -325,6 +327,7 @@ public class PingOneVerify implements Node {
                 }
 
                 if (count < timeOutCount && verifyResult==2) {
+                    /* waiting for verification success/fail for as long as configured */
                     verificationCode = ns.get("PingOneVerificationCode").asString();
                     TextOutputCallback textOutputCallback = new TextOutputCallback(TextOutputCallback.INFORMATION, "Please continue verification on your mobile device. Your verification code is: " + verificationCode);
                     PollingWaitCallback waitCallback =
@@ -380,10 +383,10 @@ public class PingOneVerify implements Node {
                     }
                 }
                 if (count < timeOutCount && verifyResult==2) {
-                    /* waiting for verification success/fail for 5 mins (just under) */
+                    /* waiting for verification success/fail for as long as configured */
                     verificationCode = ns.get("PingOneVerificationCode").asString();
                     String clientSideScriptExecutorFunction = createQrCodeScript(verificationUrl);
-                    TextOutputCallback textOutputCallback = new TextOutputCallback(TextOutputCallback.INFORMATION, "Please scan the QR code to continue verification process. Your verification code is: " + verificationCode + ", txId:" + txId);
+                    TextOutputCallback textOutputCallback = new TextOutputCallback(TextOutputCallback.INFORMATION, "Please scan the QR code to continue verification process. Your verification code is: " + verificationCode);
                     PollingWaitCallback waitCallback =
                             new PollingWaitCallback("5000", message);
                     ScriptTextOutputCallback scriptAndSelfSubmitCallback =
@@ -409,7 +412,6 @@ public class PingOneVerify implements Node {
                             return Action.goTo(SUCCESS).build();
                         }
                         else {
-                            ns.putShared("counter",0);
                             return Action.goTo(FAIL).build();
                         }
                     }
@@ -453,26 +455,28 @@ public class PingOneVerify implements Node {
         JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
         return attributeMap.get(dsAttribute).toString();
     }
-
     public String verifiedClaimAttributeToRequirementsAttribute (String vcAttribute) {
         JSONObject attributeMap = new JSONObject(ping2pingAttributeMap);
         return attributeMap.get(vcAttribute).toString();
     }
-
+    public String dsAttributeToRequirementsAttribute (String dsAttribute) {
+        return verifiedClaimAttributeToRequirementsAttribute(dsAttributeToVerifiedClaim(dsAttribute));
+    }
     public JSONObject createFuzzyMatchingAttributeMapObject () {
         JSONObject attributeMapping = new JSONObject();
-        if(config.attributesToFuzzyMatch().isEmpty()) {
+
+        if(config.fuzzyMatchingConfiguration().isEmpty()) {
             attributeMapping = null;
             return attributeMapping;
         }
-        List<String> fuzzyMatchAttributes = config.attributesToFuzzyMatch();
+        JSONObject fuzzyMatchJSONConfig = new JSONObject(config.fuzzyMatchingConfiguration());
+        JSONArray keys = fuzzyMatchJSONConfig.names();
         JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
-
-        for(int i=0; i<fuzzyMatchAttributes.size(); i++) {
+        for(int i = 0; i < keys.length(); i++) {
             String attrNameDS = "";
             String attrNameVC = "";
             String attrValue = "";
-            attrNameDS = fuzzyMatchAttributes.get(i);
+            attrNameDS = keys.get(i).toString();
             if(attributeMap.has(attrNameDS)) {
                 attrNameVC = attributeMap.getString(attrNameDS);
                 if(userAttributesDsJson.has(attrNameDS)) {
@@ -485,7 +489,21 @@ public class PingOneVerify implements Node {
         }
         return attributeMapping;
     }
-    public void getUserAttributesFromDS (NodeState ns) throws IdRepoException, SSOException {
+    public boolean getUserAttributesFromOA (NodeState ns) {
+        JsonValue objectAttributes =  ns.get("objectAttributes");
+        List<String> requiredAttributes = config.attributesToMatch();
+        for (int i = 0; i < requiredAttributes.size(); i++) {
+            String attribute = objectAttributes.get(requiredAttributes.get(i)).asString();
+            if(attribute==null || Objects.equals(attribute,"")) {
+                return false;
+            } else {
+                userAttributesDsJson.put(requiredAttributes.get(i),attribute);
+            }
+        }
+        ns.putShared("userAttributesDsJson",userAttributesDsJson.toString());
+        return true;
+    }
+        public void getUserAttributesFromDS (NodeState ns) throws IdRepoException, SSOException {
         List<String> requiredAttributes = config.attributesToMatch();
         String userName = ns.get(USERNAME).asString();
         String realm = ns.get(REALM).asString();
@@ -519,30 +537,41 @@ public class PingOneVerify implements Node {
     public boolean validateVerifiedClaims(NodeState ns, String claims) throws IdRepoException, SSOException {
         /* verification procedure here */
         List<String> requiredAttributes = config.attributesToMatch();
-        List<String> fuzzyMatchAttributes = config.attributesToFuzzyMatch();
-        ns.putShared("debug-aaa",ns.get("userAttributesDsJson").asString());
+        //List<String> fuzzyMatchAttributes = config.attributesToFuzzyMatch();
         userAttributesDsJson = new JSONObject(ns.get("userAttributesDsJson").asString());
 
         String accessToken = ns.get("PingOneAccessToken").asString();
         String verifyTxId = ns.get("PingOneVerifyTxId").asString();
-        String minConfidenceLevel = getConfidenceLevel(config.fuzzyMatchConfidenceLevel());
 
-        if(!fuzzyMatchAttributes.isEmpty()) {
+        if(!config.fuzzyMatchingConfiguration().isEmpty()) {
+            /* get biographic data from metaData */
             String biographicData = getVerifyBiographicMetadata(accessToken, getVerifyEndpointUrl(), verifyTxId);
             JSONObject biographicDataJSON = new JSONObject(biographicData);
             JSONArray biographicDataJSONArray = biographicDataJSON.getJSONArray("biographic_match_results");
-            for (int i = 0; i < biographicDataJSONArray.length(); i++) {
-                JSONObject entry = biographicDataJSONArray.getJSONObject(i);
-                /* if the confidence level in the biographical match is lower than threshold= */
-                if (levelToNumber(entry.getString("match")) < levelToNumber(getConfidenceLevel(config.fuzzyMatchConfidenceLevel()))) {
-                    ns.putShared("PingOneVerifyBiographicMatch","below set confidence level");
-                    return false;
+            /*get attribute confidence map from config */
+            JSONObject attributeConfidenceMap = new JSONObject(config.fuzzyMatchingConfiguration());
+            JSONArray keys = attributeConfidenceMap.names();
+
+            for (int i = 0; i < keys.length(); i++) {
+                String configAttribute = keys.getString(i);
+                int configAttributeConfidence = levelToNumber(attributeConfidenceMap.get(configAttribute).toString());
+                configAttribute = dsAttributeToRequirementsAttribute(configAttribute);
+                for (int y = 0; y < biographicDataJSONArray.length(); y++) {
+                    JSONObject entry = biographicDataJSONArray.getJSONObject(y);
+                    if(Objects.equals(configAttribute,entry.get("identifier").toString())) {
+                        int bioAttributeConfidence = levelToNumber(entry.getString("match"));
+                        if (bioAttributeConfidence < configAttributeConfidence) {
+                            ns.putShared("PingOneVerifyBiographicMatch", "below set confidence level");
+                            ns.putShared("PingOneVerifyBiographicResult",biographicData);
+                            return false;
+                        } else {
+                            y  = biographicDataJSONArray.length();
+                        }
+                    }
                 }
             }
-            ns.putShared("debug-biographicMatching",biographicData);
         }
         int matchedAttributes = 0;
-
         /* compare the attributes */
         JSONObject userAttributesVcJson = new JSONObject(claims);
         for(int i=0; i<requiredAttributes.size(); i++) {
@@ -552,17 +581,16 @@ public class PingOneVerify implements Node {
             if(Objects.equals(dsAttr.toUpperCase(), vcAttr.toUpperCase())) {
                 matchedAttributes++;
             } else {
-                boolean fuzzyMatch = false;
-                for (int y = 0; y < fuzzyMatchAttributes.size(); y++) {
-                    if(Objects.equals(fuzzyMatchAttributes.get(y),requiredAttributes.get(i))) {
-                        /* this attribute is on a fuzzy match list */
-                        fuzzyMatch = true;
-                        y = fuzzyMatchAttributes.size();
+                if(!config.fuzzyMatchingConfiguration().isEmpty()) {
+                    JSONObject attributeConfidenceMap = new JSONObject(config.fuzzyMatchingConfiguration());
+                    JSONArray keys = attributeConfidenceMap.names();
+                    for (int y = 0; y < keys.length(); y++) {
+                        if (Objects.equals(keys.get(y).toString(), requiredAttributes.get(i))) {
+                            // this attribute is on a fuzzy match list
+                            matchedAttributes++;
+                            y = keys.length();
+                        }
                     }
-                }
-                if(fuzzyMatch) {
-                    /* ignoring the comparison, as it comes from PingOne Verify */
-                    matchedAttributes++;
                 }
             }
         }
@@ -874,25 +902,12 @@ public class PingOneVerify implements Node {
     public static class PingOneVerifyOutcomeProvider implements OutcomeProvider {
         @Override
         public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
-
             ResourceBundle bundle = locales.getBundleInPreferredLocale(PingOneVerify.BUNDLE,
                     OutcomeProvider.class.getClassLoader());
-
             List<Outcome> results = new ArrayList<>();
-            /*
-            if(nodeAttributes.get("attributesToFuzzyMatch").required().asList(String.class).isEmpty()) {
-                results.add(new Outcome(SUCCESS,  bundle.getString("successOutcome")));
-            }
-            else {
-                results.add(new Outcome(HIGH_CONFIDENCE,  bundle.getString("confidenceHighOutcome")));
-                results.add(new Outcome(MEDIUM_CONFIDENCE,  bundle.getString("confidenceMediumOutcome")));
-                results.add(new Outcome(LOW_CONFIDENCE,  bundle.getString("confidenceLowOutcome")));
-            }*/
-
             results.add(new Outcome(SUCCESS,  bundle.getString("successOutcome")));
             results.add(new Outcome(FAIL, bundle.getString("failOutcome")));
             results.add(new Outcome(ERROR, bundle.getString("errorOutcome")));
-
             return Collections.unmodifiableList(results);
         }
     }
