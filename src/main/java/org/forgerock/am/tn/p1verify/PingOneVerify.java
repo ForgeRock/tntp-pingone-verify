@@ -104,7 +104,18 @@ public class PingOneVerify implements Node {
             "  \"address\" : \"address\",\n" +
             "  \"birthDate\" : \"birth_date\"\n" +
             "}";
-
+    public String verifiedClaimsDemo = "{\n" +
+            "                    \"address\": \"123 HILLCREST VIEW, NOTTINGHAM\",\n" +
+            "                    \"birthDate\": \"1985-04-01\",\n" +
+            "                    \"country\": \"GBR\",\n" +
+            "                    \"expirationDate\": \"2045-12-31\",\n" +
+            "                    \"firstName\": \"MR JOHN\",\n" +
+            "                    \"fullName\": \"MR JOHN DOE\",\n" +
+            "                    \"idNumber\": \"DOE654546HJ7TF34\",\n" +
+            "                    \"idType\": \"[DriversLicenseFront, DriversLicenseBack]\",\n" +
+            "                    \"issueDate\": \"2000-10-15\",\n" +
+            "                    \"lastName\": \"DOE\"\n" +
+            "                }";
     /**
      * Configuration for the node.
      */
@@ -183,6 +194,8 @@ public class PingOneVerify implements Node {
         }
         @Attribute(order = 360)
         default boolean attributeLookup() { return false; }
+        @Attribute(order = 380)
+        default boolean demoMode() { return false; }
     }
 
 
@@ -336,11 +349,15 @@ public class PingOneVerify implements Node {
                 } else {
                     /* clean sharedState */
                     ns.putShared("counter",0);
-
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
                         /* We need to fetch the verifiedData claims */
-                        verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(),verifyTxId);
+                        if(!config.demoMode()) {
+                            verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(), verifyTxId);
+                        } else {
+                            /*we are in demo mode, returning example dataset*/
+                            verifiedClaims = verifiedClaimsDemo;
+                        }
                         if(verifiedClaims.indexOf("error")==0) {
                             /* failed to fetch the verifiedData from PingOne Verify */
                             ns.putShared("PingOneVerifyFailedToGetVerifiedData","true");
@@ -380,7 +397,6 @@ public class PingOneVerify implements Node {
 
                 if(count>3) {
                     /*wait for 15 seconds before we start checking for result*/
-                    //String verifyTxId = "bc706a80-df9e-4fa9-8ce1-8e567f8fc22e";
                     String sResult = getVerifyResult(accessToken, getVerifyEndpointUrl(),verifyTxId );
                     if (sResult.indexOf("error")!=0) {
                         verifyResult = checkVerifyResult(sResult);
@@ -400,11 +416,15 @@ public class PingOneVerify implements Node {
                 } else {
                     /* clean sharedState */
                     ns.putShared("counter",0);
-
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
                         /* We need to fetch the verifiedData claims */
-                        verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(),verifyTxId);
+                        if(!config.demoMode()) {
+                            verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(), verifyTxId);
+                        } else {
+                            /*we are in demo mode, returning example dataset*/
+                           verifiedClaims = verifiedClaimsDemo;
+                        }
                         if(verifiedClaims.indexOf("error")==0) {
                             /* failed to fetch the verifiedData from PingOne Verify */
                             ns.putShared("PingOneVerifyFailedToGetVerifiedData","true");
@@ -544,6 +564,12 @@ public class PingOneVerify implements Node {
     }
     public boolean validateVerifiedClaims(NodeState ns, String claims) throws IdRepoException, SSOException {
         /* verification procedure here */
+
+        if(config.demoMode()) {
+            /* always successful in demo mode */
+            return true;
+        }
+
         List<String> requiredAttributes = config.attributesToMatch();
         userAttributesDsJson = new JSONObject(ns.get("userAttributesDsJson").asString());
 
@@ -694,18 +720,14 @@ public class PingOneVerify implements Node {
             String result = "";
             result = obj.getJSONObject("transactionStatus").getString("status");
             if (Objects.equals(result, "SUCCESS")) {
-                /*
-                if(obj.has("verifiedUserData")) {
-                    verifiedClaims = obj.getJSONObject("verifiedUserData").toString();
-                }*/
                 return 1; /*success*/
             } else if (Objects.equals(result, "FAIL")) {
-                /*if(obj.has("verifiedUserData")) {
-                    verifiedClaims = obj.getJSONObject("verifiedUserData").toString();
-                    verifyStatus = obj.getJSONObject("transactionStatus").getJSONObject("verificationStatus").toString();
-                }*/
                 verifyStatus = obj.getJSONObject("transactionStatus").getJSONObject("verificationStatus").toString();
-                return 0; /*failed*/
+                if(config.demoMode()) {
+                    return 1; /*always successful in demo mode*/
+                } else {
+                    return 0; /*failed*/
+                }
             }
             else {
                 return 2; /*pending*/
