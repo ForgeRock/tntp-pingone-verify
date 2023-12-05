@@ -91,6 +91,7 @@ public class PingOneVerify implements Node {
     public String verificationUrl;
     public String verifiedClaims;
     public String verifyStatus;
+    public String verifyMetadata;
     public JSONObject userAttributesDsJson = new JSONObject();
     private final CoreWrapper coreWrapper;
     private static final String FAIL = "FAIL";
@@ -156,12 +157,14 @@ public class PingOneVerify implements Node {
         default FlowType flowType() {
             return FlowType.REGISTRATION;
         }
-        @Attribute(order = 265)
+        @Attribute(order = 270)
         default int timeOut() {
             return 270;
         }
         @Attribute(order = 280)
-        default boolean saveVerifiedClaims() { return true; }
+        default boolean saveVerifiedClaims() { return false; }
+        @Attribute(order = 290)
+        default boolean saveMetadata() { return false; }
         @Attribute(order = 300)
         default Map<String, String> attributeMappingConfiguration() {
             return new HashMap<String, String>() {{
@@ -178,9 +181,9 @@ public class PingOneVerify implements Node {
                 put("expirationDateAttribute", "expirationDate");
             }};
         }
-        @Attribute(order = 320)
+        @Attribute(order = 310)
         List<String> attributesToMatch();
-        @Attribute(order = 340)
+        @Attribute(order = 320)
         default Map<String, String> fuzzyMatchingConfiguration() {
             return new HashMap<String, String>() {{
                 /* key is DS attribute name,
@@ -192,9 +195,9 @@ public class PingOneVerify implements Node {
                 put("birthDateAttribute", "MEDIUM");
             }};
         }
-        @Attribute(order = 360)
+        @Attribute(order = 330)
         default boolean attributeLookup() { return false; }
-        @Attribute(order = 380)
+        @Attribute(order = 340)
         default boolean demoMode() { return false; }
     }
 
@@ -349,6 +352,13 @@ public class PingOneVerify implements Node {
                 } else {
                     /* clean sharedState */
                     ns.putShared("counter",0);
+                    if((config.saveMetadata() || !createFuzzyMatchingAttributeMapObject().isEmpty()) && !config.demoMode() ) {
+                        /* we need metadata for either processing or to save in sharedState, demoMode is off */
+                        verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(), verifyTxId);
+                        if(config.saveMetadata()) {
+                            ns.putShared("PingOneVerifyMetadata",verifyMetadata);
+                        }
+                    }
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
                         /* We need to fetch the verifiedData claims */
@@ -363,6 +373,12 @@ public class PingOneVerify implements Node {
                             ns.putShared("PingOneVerifyFailedToGetVerifiedData","true");
                             ns.putShared("PingOneAccessToken","");
                             return Action.goTo(FAIL).build();
+                        }
+                        if(config.saveMetadata() || !createFuzzyMatchingAttributeMapObject().isEmpty()) {
+                            verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(), verifyTxId);
+                            if(config.saveMetadata()) {
+                                ns.putShared("PingOneVerifyMetadata",verifyMetadata);
+                            }
                         }
                         if(onResultSuccess(ns)){
                             ns.putShared("userAttributesDsJson","");
@@ -416,6 +432,13 @@ public class PingOneVerify implements Node {
                 } else {
                     /* clean sharedState */
                     ns.putShared("counter",0);
+                    if((config.saveMetadata() || !createFuzzyMatchingAttributeMapObject().isEmpty()) && !config.demoMode() ) {
+                        /* we need metadata for either processing or to save in sharedState, demoMode is off */
+                        verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(), verifyTxId);
+                        if(config.saveMetadata()) {
+                            ns.putShared("PingOneVerifyMetadata",verifyMetadata);
+                        }
+                    }
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
                         /* We need to fetch the verifiedData claims */
@@ -578,7 +601,7 @@ public class PingOneVerify implements Node {
 
         if(!config.fuzzyMatchingConfiguration().isEmpty()) {
             /* get biographic data from metaData */
-            String biographicData = getVerifyBiographicMetadata(accessToken, getVerifyEndpointUrl(), verifyTxId);
+            String biographicData = getVerifyBiographicMetadata(verifyMetadata);
             if(biographicData.indexOf("error")==0) {
                 ns.putShared("PingOneVerifyFailedToFetchBiographicResult",biographicData);
                 return false;
@@ -814,6 +837,60 @@ public class PingOneVerify implements Node {
         }
         return "error";
     }
+    public static String getVerifyTransactionMetadata(String accessToken, String endpoint, String vTxId) {
+        String resultEndpoint = endpoint + "/" + vTxId + "/metaData";
+        StringBuffer response = new StringBuffer();
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(resultEndpoint);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(4000);
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            conn.setRequestMethod("GET");
+            if(conn.getResponseCode()==200){
+                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                in.close();
+                JSONObject responseJSON = new JSONObject(response.toString());
+                JSONArray metaDataArray = responseJSON.getJSONObject("_embedded").getJSONArray("metaData");
+                return metaDataArray.toString();
+            } else {
+                String responseError = "error:" + conn.getResponseCode();
+                return responseError;
+            }
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        finally {
+            if(conn!=null) {
+                conn.disconnect();
+            }
+        }
+        return "error";
+    }
+    public static String getVerifyBiographicMetadata(String metadata) {
+        String biographicMetaData = "";
+        JSONArray metaDataArray = new JSONArray(metadata);
+        for(int i=0; i<metaDataArray.length(); i++) {
+            String entry = "";
+            entry = metaDataArray.get(i).toString();
+            JSONObject entryJSON = new JSONObject(entry);
+            if(Objects.equals(entryJSON.get("type"),"BIOGRAPHIC_MATCH")) {
+                biographicMetaData = entryJSON.getJSONObject("data").toString();
+                i = metaDataArray.length();
+            }
+        }
+        return biographicMetaData;
+    }
+    /*
     public static String getVerifyBiographicMetadata(String accessToken, String endpoint, String vTxId) {
         String resultEndpoint = endpoint + "/" + vTxId + "/metaData";
         StringBuffer response = new StringBuffer();
@@ -862,7 +939,8 @@ public class PingOneVerify implements Node {
             }
         }
         return "error";
-    }
+    }*/
+
     public static String createTransactionCallBody (String policyId, String telephoneNumber, String emailAddress, JSONObject fuzzyMatchingAttributes) {
         String body ="{\"verifyPolicy\": {\"id\":\"" + policyId + "\"}";
         if(telephoneNumber!="" && telephoneNumber!=null) {
