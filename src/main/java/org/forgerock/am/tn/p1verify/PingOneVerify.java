@@ -318,9 +318,10 @@ public class PingOneVerify implements Node {
                 verificationCode = obj.getString("webVerificationCode");
                 ns.putShared("PingOneVerificationCode",verificationCode);
                 /* this could be derived from API response (webVerificationUrl) */
-                verificationUrl = "https://apps.pingone.eu/" + config.envId() + "/verify/verify-webapp/v2/index.html?txnid=" +
+                verificationUrl = obj.getString("webVerificationUrl");
+                /*verificationUrl = "https://apps.pingone.eu/" + config.envId() + "/verify/verify-webapp/v2/index.html?txnid=" +
                         txId + "&url=https://api.pingone.eu/v1/idValidations/webVerifications&code=" + verificationCode +
-                        "&envId=" + config.envId();
+                        "&envId=" + config.envId();*/
             }
             if (ns.get("verifyStage").asInteger() == 3) {
                 /*sms and email*/
@@ -432,7 +433,7 @@ public class PingOneVerify implements Node {
                 } else {
                     /* clean sharedState */
                     ns.putShared("counter",0);
-                    if((config.saveMetadata() || !createFuzzyMatchingAttributeMapObject().isEmpty()) && !config.demoMode() ) {
+                    if((config.saveMetadata() || createFuzzyMatchingAttributeMapObject()!=null) && !config.demoMode() ) {
                         /* we need metadata for either processing or to save in sharedState, demoMode is off */
                         verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(), verifyTxId);
                         if(config.saveMetadata()) {
