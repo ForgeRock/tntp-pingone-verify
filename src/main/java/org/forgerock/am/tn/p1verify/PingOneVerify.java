@@ -224,8 +224,9 @@ public class PingOneVerify implements Node {
         try {
             logger.debug(loggerPrefix + "Started");
 
-            //String userIdAttr = config.userIdAttribute();
+            /* check if we have PingOne Verify User ID attribute in config */
             if(config.userIdAttribute() == null) {
+                /* cannot continue without */
                 ns.putShared("PingOneVerifyError","PingOne UserID attribute (node config) needs to be defined");
                 return Action.goTo(ERROR).build();
             }
