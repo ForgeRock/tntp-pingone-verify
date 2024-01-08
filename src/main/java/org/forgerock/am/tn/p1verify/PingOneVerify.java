@@ -144,7 +144,7 @@ public class PingOneVerify implements Node {
         }
         @Attribute(order = 170)
         default String userIdAttribute() {
-            return "description";
+            return "";
         }
         @Attribute(order = 180)
         default String verifyPolicyId() {
@@ -224,10 +224,17 @@ public class PingOneVerify implements Node {
         try {
             logger.debug(loggerPrefix + "Started");
 
+            //String userIdAttr = config.userIdAttribute();
+            if(config.userIdAttribute() == null) {
+                ns.putShared("PingOneVerifyError","PingOne UserID attribute (node config) needs to be defined");
+                return Action.goTo(ERROR).build();
+            }
+
             if (!ns.isDefined("verifyStage")) {
                 ns.putShared("verifyStage", 0);
                 ns.putShared("counter", 0);
             }
+
 
             if (config.userNotificationChoice() && ns.get("verifyStage").asInteger() < 2) {
                 /* user is allowed to choose delivery method*/
