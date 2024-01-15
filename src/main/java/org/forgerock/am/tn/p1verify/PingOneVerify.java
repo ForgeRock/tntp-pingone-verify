@@ -27,6 +27,12 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.UUID;
 
@@ -99,6 +105,7 @@ public class PingOneVerify implements Node {
 	private static final String SUCCESS = "SUCCESS";
 	private static final String ERROR = "ERROR";
     private static final String IDNOMATCH = "IDNOMATCH";
+    private static final String AGEFAILED = "AGEFAILED";
 
 
     public String ping2pingAttributeMap = "{\n" +
@@ -131,44 +138,48 @@ public class PingOneVerify implements Node {
         default String envId() {
             return "";
         }
-        @Attribute(order = 120)
+        @Attribute(order = 110)
         default String clientId() {
             return "";
         }
-        @Attribute(order = 140)
+        @Attribute(order = 120)
         @Password
         char[] clientSecret();
-        @Attribute(order = 160)
+        @Attribute(order = 130)
         default VerifyRegion verifyRegion() {
             return VerifyRegion.EU;
         }
-        @Attribute(order = 170)
+        @Attribute(order = 140)
         default String userIdAttribute() {
             return "";
         }
-        @Attribute(order = 180)
+        @Attribute(order = 150)
         default String verifyPolicyId() {
             return "";
         }
-        @Attribute(order = 220)
+        @Attribute(order = 160)
         default UserNotification userNotification() {
             return UserNotification.QR;
         }
-        @Attribute(order = 240)
+        @Attribute(order = 170)
         default boolean userNotificationChoice() { return false; }
-        @Attribute(order = 260)
+        @Attribute(order = 180)
         default FlowType flowType() {
             return FlowType.REGISTRATION;
         }
-        @Attribute(order = 270)
+        @Attribute(order = 190)
+        default int dobVerification() {return 0;}
+        @Attribute(order = 200)
+        default boolean failExpired() {return false;}
+        @Attribute(order = 210)
         default int timeOut() {
             return 270;
         }
-        @Attribute(order = 280)
+        @Attribute(order = 220)
         default boolean saveVerifiedClaims() { return false; }
-        @Attribute(order = 290)
+        @Attribute(order = 230)
         default boolean saveMetadata() { return false; }
-        @Attribute(order = 300)
+        @Attribute(order = 240)
         default Map<String, String> attributeMappingConfiguration() {
             return new HashMap<String, String>() {{
                 /* key is DS attribute name,
@@ -184,9 +195,9 @@ public class PingOneVerify implements Node {
                 put("expirationDateAttribute", "expirationDate");
             }};
         }
-        @Attribute(order = 310)
+        @Attribute(order = 250)
         List<String> attributesToMatch();
-        @Attribute(order = 320)
+        @Attribute(order = 260)
         default Map<String, String> fuzzyMatchingConfiguration() {
             return new HashMap<String, String>() {{
                 /* key is DS attribute name,
@@ -198,9 +209,9 @@ public class PingOneVerify implements Node {
                 put("birthDateAttribute", "MEDIUM");
             }};
         }
-        @Attribute(order = 330)
+        @Attribute(order = 270)
         default boolean attributeLookup() { return false; }
-        @Attribute(order = 340)
+        @Attribute(order = 280)
         default boolean demoMode() { return false; }
     }
 
@@ -224,6 +235,26 @@ public class PingOneVerify implements Node {
         try {
             logger.debug(loggerPrefix + "Started");
 
+            /* testing - remove */
+            int a=22;
+            if(a==21) {
+                String toParse = "2024-03-01 00:00:01.000-00:00";
+
+                //String toParse = "2021-01-14 16:23:46.217-06:00";
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
+                OffsetDateTime dateTime = OffsetDateTime.parse(toParse, formatter);
+
+                Instant now = Instant.now();
+                long days = ChronoUnit.DAYS.between(now, dateTime.toInstant());
+
+                ns.putShared("debug-expiry-days",days);
+
+                return Action.goTo(ERROR).build();
+
+            }
+
+
+
             /* check if we have PingOne Verify User ID attribute in config */
             if(config.userIdAttribute() == null) {
                 /* cannot continue without */
@@ -235,7 +266,6 @@ public class PingOneVerify implements Node {
                 ns.putShared("verifyStage", 0);
                 ns.putShared("counter", 0);
             }
-
 
             if (config.userNotificationChoice() && ns.get("verifyStage").asInteger() < 2) {
                 /* user is allowed to choose delivery method*/
@@ -502,9 +532,30 @@ public class PingOneVerify implements Node {
                             ns.putShared("PingOneAccessToken","");
                             return Action.goTo(FAIL).build();
                         }
-                        if(onResultSuccess(ns)){
-                            ns.putShared("userAttributesDsJson","");
-                            ns.putShared("PingOneAccessToken","");
+                        if(onResultSuccess(ns)) {
+                            JSONObject claims = new JSONObject(verifiedClaims);
+                            ns.putShared("userAttributesDsJson", "");
+                            ns.putShared("PingOneAccessToken", "");
+
+                            if(config.failExpired()) {
+                                /* check expiration date */
+                                if (claims.has("expirationDate")) {
+                                    /* there is expiration date in the verified claims */
+                                    if (!validateDocumentExpiration(claims.getString("expirationDate"))) {
+                                        /* document expired */
+                                        ns.putShared("PingOneVerifyDocumentExpired","true");
+                                        return Action.goTo(FAIL).build();
+                                    }
+                                }
+                            }
+
+                            if (config.dobVerification() > 0) {
+                                if (calculateAge(ns, claims.getString("birthDate")) >= config.dobVerification()) {
+                                    //return Action.goTo(SUCCESS).build();
+                                } else {
+                                    return Action.goTo(AGEFAILED).build();
+                                }
+                            }
                             return Action.goTo(SUCCESS).build();
                         }
                         else {
@@ -618,6 +669,28 @@ public class PingOneVerify implements Node {
 
         //return coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm).getAttribute(config.userIdAttribute()).toString();
     }
+    public long calculateAge(NodeState ns, String dobClaim) {
+        String toParse = dobClaim + " 00:00:01.000-00:00";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
+        OffsetDateTime dateTime = OffsetDateTime.parse(toParse, formatter);
+        Instant now = Instant.now();
+        ns.putShared("Age",ChronoUnit.DAYS.between(dateTime.toInstant(), now)/365);
+        return ChronoUnit.DAYS.between(dateTime.toInstant(), now)/365;
+    }
+    public boolean validateDocumentExpiration(String expirationDateClaim) {
+        String toParse = expirationDateClaim + " 00:00:01.000-00:00";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
+        OffsetDateTime dateTime = OffsetDateTime.parse(toParse, formatter);
+        Instant now = Instant.now();
+        long days = ChronoUnit.DAYS.between(now, dateTime.toInstant());
+        if(days<0) {
+            return false;
+        } else {
+            return true;
+        }
+
+    }
+
     public void getUserAttributesFromDS (NodeState ns) throws IdRepoException, SSOException {
         List<String> requiredAttributes = config.attributesToMatch();
         String userName = ns.get(USERNAME).asString();
@@ -1087,8 +1160,14 @@ public class PingOneVerify implements Node {
             results.add(new Outcome(SUCCESS,  bundle.getString("successOutcome")));
             results.add(new Outcome(FAIL, bundle.getString("failOutcome")));
 
+            /* Add ID NO MATCH outcome to VERIFICATION flow */
             if (Objects.equals(nodeAttributes.get("flowType").toString(),"\"VERIFICATION\"")) {
                 results.add(new Outcome(IDNOMATCH, bundle.getString("idnomatch")));
+            }
+
+            /* Add AGE FAIL outcome to REGISTRATION flow (only) if using age verification*/
+            if (!Objects.equals(nodeAttributes.get("dobVerification").toString(),"0") && Objects.equals(nodeAttributes.get("flowType").toString(),"\"REGISTRATION\"")) {
+                results.add(new Outcome(AGEFAILED, bundle.getString("ageFail")));
             }
 
             results.add(new Outcome(ERROR, bundle.getString("errorOutcome")));
