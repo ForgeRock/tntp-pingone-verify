@@ -198,6 +198,8 @@ public class PingOneVerify implements Node {
         @Attribute(order = 250)
         List<String> attributesToMatch();
         @Attribute(order = 260)
+        default boolean preserveAttributes() { return true; }
+        @Attribute(order = 270)
         default Map<String, String> fuzzyMatchingConfiguration() {
             return new HashMap<String, String>() {{
                 /* key is DS attribute name,
@@ -209,9 +211,9 @@ public class PingOneVerify implements Node {
                 put("birthDateAttribute", "MEDIUM");
             }};
         }
-        @Attribute(order = 270)
-        default boolean attributeLookup() { return false; }
         @Attribute(order = 280)
+        default boolean attributeLookup() { return false; }
+        @Attribute(order = 290)
         default boolean demoMode() { return false; }
     }
 
@@ -364,6 +366,16 @@ public class PingOneVerify implements Node {
                         boolean result = getUserAttributesFromOA(ns);
                         if(!result) {
                             ns.putShared("PingOneVerifyMissingAttributesInSharedState","true");
+                            return Action.goTo(ERROR).build();
+                        }
+                    }
+                } else {
+                    /* for REGISTRATION flow check if we want to verify attributes */
+                    if(!config.fuzzyMatchingConfiguration().isEmpty()) {
+                        /* we want to match attributes in REGISTRATION */
+                        boolean result = getUserAttributesFromOA(ns);
+                        if (!result) {
+                            ns.putShared("PingOneVerifyMissingAttributesInSharedState", "true");
                             return Action.goTo(ERROR).build();
                         }
                     }
@@ -596,10 +608,14 @@ public class PingOneVerify implements Node {
             /* checks failed */
             return validateVerifiedClaims(ns, verifiedClaims);
         } else {
-            /* for REGISTRATION no checks are needed
+            /* for REGISTRATION checks are only needed if configured
             but we are mapping claims to objectAttributes */
             verifiedClaimsToSharedState(ns,verifiedClaims);
-            return true;
+            if(!config.attributesToMatch().isEmpty()) {
+                return validateVerifiedClaims(ns, verifiedClaims);
+            } else {
+                return true;
+            }
         }
     }
     public String dsAttributeToVerifiedClaim (String dsAttribute) {
@@ -615,8 +631,7 @@ public class PingOneVerify implements Node {
     }
     public JSONObject createFuzzyMatchingAttributeMapObject () {
         JSONObject attributeMapping = new JSONObject();
-
-        if(config.fuzzyMatchingConfiguration().isEmpty() || Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
+        if(config.fuzzyMatchingConfiguration().isEmpty()) {
             attributeMapping = null;
             return attributeMapping;
         }
@@ -803,7 +818,16 @@ public class PingOneVerify implements Node {
             String key = keys.getString (i);
             String value = attributeMap.getString (key);
             if(dataJson.has(value)){
-                objectAttributes.put(key, dataJson.get(value));
+                if(!config.preserveAttributes()) {
+                    /* we are putting all claims if we're not preserving original attributes */
+                    objectAttributes.put(key, dataJson.get(value));
+                }
+                else {
+                    /* we are preserving existing user attributes in objectAttributes */
+                    if(!objectAttributes.isDefined(key)) {
+                        objectAttributes.put(key, dataJson.get(value));
+                    }
+                }
             }
         }
         ns.putShared("objectAttributes",objectAttributes);
