@@ -486,7 +486,7 @@ public class PingOneVerify implements Node {
                                 }
                             }
 
-                            if (config.dobVerification() > 0) {
+                            if (config.dobVerification() > 0 && Objects.equals(getFlowType(config.flowType()), "REGISTRATION")) {
                                 if (calculateAge(ns, claims.getString("birthDate")) >= config.dobVerification()) {
                                     //return Action.goTo(SUCCESS).build();
                                 } else {
@@ -583,7 +583,7 @@ public class PingOneVerify implements Node {
                                 }
                             }
 
-                            if (config.dobVerification() > 0) {
+                            if (config.dobVerification() > 0 && Objects.equals(getFlowType(config.flowType()), "REGISTRATION")) {
                                 if (calculateAge(ns, claims.getString("birthDate")) >= config.dobVerification()) {
                                     //return Action.goTo(SUCCESS).build();
                                 } else {
