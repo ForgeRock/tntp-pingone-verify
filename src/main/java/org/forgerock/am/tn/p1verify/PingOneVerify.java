@@ -470,9 +470,31 @@ public class PingOneVerify implements Node {
                             }
                         }
                         if(onResultSuccess(ns)){
-                            ns.putShared("userAttributesDsJson","");
-                            ns.putShared("PingOneAccessToken","");
+                            JSONObject claims = new JSONObject(verifiedClaims);
+                            ns.putShared("userAttributesDsJson", "");
+                            ns.putShared("PingOneAccessToken", "");
+
+                            if(config.failExpired()) {
+                                /* check expiration date */
+                                if (claims.has("expirationDate")) {
+                                    /* there is expiration date in the verified claims */
+                                    if (!validateDocumentExpiration(claims.getString("expirationDate"))) {
+                                        /* document expired */
+                                        ns.putShared("PingOneVerifyDocumentExpired","true");
+                                        return Action.goTo(FAIL).build();
+                                    }
+                                }
+                            }
+
+                            if (config.dobVerification() > 0) {
+                                if (calculateAge(ns, claims.getString("birthDate")) >= config.dobVerification()) {
+                                    //return Action.goTo(SUCCESS).build();
+                                } else {
+                                    return Action.goTo(AGEFAILED).build();
+                                }
+                            }
                             return Action.goTo(SUCCESS).build();
+
                         } else {
                             ns.putShared("userAttributesDsJson","");
                             ns.putShared("PingOneAccessToken","");
