@@ -237,26 +237,6 @@ public class PingOneVerify implements Node {
         try {
             logger.debug(loggerPrefix + "Started");
 
-            /* testing - remove */
-            int a=22;
-            if(a==21) {
-                String toParse = "2024-03-01 00:00:01.000-00:00";
-
-                //String toParse = "2021-01-14 16:23:46.217-06:00";
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
-                OffsetDateTime dateTime = OffsetDateTime.parse(toParse, formatter);
-
-                Instant now = Instant.now();
-                long days = ChronoUnit.DAYS.between(now, dateTime.toInstant());
-
-                ns.putShared("debug-expiry-days",days);
-
-                return Action.goTo(ERROR).build();
-
-            }
-
-
-
             /* check if we have PingOne Verify User ID attribute in config */
             if(config.userIdAttribute() == null) {
                 /* cannot continue without */
@@ -287,12 +267,12 @@ public class PingOneVerify implements Node {
                     ns.putShared("verifyStage", 2);
                 }
             } else if (ns.get("verifyStage").asInteger() < 2) {
-                /*config determines delivery method*/
+                /* config determines delivery method */
                 ns.putShared("PingOneVerifySelection", getDeliveryMethod(config.userNotification()));
                 ns.putShared("verifyStage", 2);
             }
             if (ns.get("verifyStage").asInteger() == 2) {
-                /*starting the verification procedure*/
+                /* starting the verification procedure */
                 String telephoneNumber = null;
                 String emailAddress = null;
                 String clientSecret = new String(config.clientSecret());
@@ -355,7 +335,7 @@ public class PingOneVerify implements Node {
                         return Action.goTo(ERROR).build();
                     }
                 } else if (verifyDeliveryMethod == 2) {
-                    //qr
+                    /* qr */
                     ns.putShared("verifyStage", 4);
                 }
                 if(Objects.equals(getFlowType(config.flowType()), "VERIFICATION")) {
@@ -398,20 +378,14 @@ public class PingOneVerify implements Node {
                 }
                 JSONObject obj = new JSONObject(verifyTxResponse);
 
-                //txId = "071c6219-3e33-467f-b88e-c9954e68c581";
-                //verificationCode  = "122345";
                 txId = obj.getString("id");
                 ns.putShared("PingOneVerifyTxId",txId);
                 verificationCode = obj.getString("webVerificationCode");
                 ns.putShared("PingOneVerificationCode",verificationCode);
-                /* this could be derived from API response (webVerificationUrl) */
                 verificationUrl = obj.getString("webVerificationUrl");
-                /*verificationUrl = "https://apps.pingone.eu/" + config.envId() + "/verify/verify-webapp/v2/index.html?txnid=" +
-                        txId + "&url=https://api.pingone.eu/v1/idValidations/webVerifications&code=" + verificationCode +
-                        "&envId=" + config.envId();*/
             }
             if (ns.get("verifyStage").asInteger() == 3) {
-                /*sms and email*/
+                /* sms and email */
                 String accessToken = ns.get("PingOneAccessToken").asString();
                 String verifyTxId = ns.get("PingOneVerifyTxId").asString();
                 String p1vUserId = ns.get("p1vUserId").asString();
@@ -423,7 +397,7 @@ public class PingOneVerify implements Node {
                 String message = "Interval: " + count;
                 int verifyResult = 2;
                 if(count>3) {
-                    /*wait for 15 seconds before we start checking for result*/
+                    /* wait for 15 seconds before we start checking for result */
                     String sResult = getVerifyResult(accessToken, getVerifyEndpointUrl(p1vUserId),verifyTxId);
                     if (sResult.indexOf("error")!=0) {
                         verifyResult = checkVerifyResult(sResult);
@@ -634,8 +608,10 @@ public class PingOneVerify implements Node {
             but we are mapping claims to objectAttributes */
             verifiedClaimsToSharedState(ns,verifiedClaims);
             if(!config.attributesToMatch().isEmpty()) {
+                /*  attribute matching required*/
                 return validateVerifiedClaims(ns, verifiedClaims);
             } else {
+                /* attribute matching not required */
                 return true;
             }
         }
