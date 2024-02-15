@@ -189,10 +189,6 @@ public class PingOneVerify implements Node {
                 put("cn", "fullName");
                 put("postalAddress", "address");
                 put("country", "country");
-                put("birthDateAttribute", "birthDate");
-                put("idNumberAttribute", "idNumber");
-                put("idTypeAttribute", "idType");
-                put("expirationDateAttribute", "expirationDate");
             }};
         }
         @Attribute(order = 250)
@@ -200,17 +196,7 @@ public class PingOneVerify implements Node {
         @Attribute(order = 260)
         default boolean preserveAttributes() { return true; }
         @Attribute(order = 270)
-        default Map<String, String> fuzzyMatchingConfiguration() {
-            return new HashMap<String, String>() {{
-                /* key is DS attribute name,
-                value is the confidence level required for success */
-                put("givenName", "LOW");
-                put("sn", "HIGH");
-                put("address", "LOW");
-                put("cn", "MEDIUM");
-                put("birthDateAttribute", "MEDIUM");
-            }};
-        }
+        Map<String, String> fuzzyMatchingConfiguration();
         @Attribute(order = 280)
         default boolean attributeLookup() { return false; }
         @Attribute(order = 290)
@@ -415,7 +401,7 @@ public class PingOneVerify implements Node {
                 } else {
                     /* clean sharedState */
                     ns.putShared("counter",0);
-                    if((config.saveMetadata() || !createFuzzyMatchingAttributeMapObject().isEmpty()) && !config.demoMode() ) {
+                    if((config.saveMetadata() || createFuzzyMatchingAttributeMapObject()!=null) && !config.demoMode() ) {
                         /* we need metadata for either processing or to save in sharedState, demoMode is off */
                         verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
                         if(config.saveMetadata()) {
@@ -437,7 +423,7 @@ public class PingOneVerify implements Node {
                             ns.putShared("PingOneAccessToken","");
                             return Action.goTo(FAIL).build();
                         }
-                        if(config.saveMetadata() || !createFuzzyMatchingAttributeMapObject().isEmpty()) {
+                        if(config.saveMetadata() || createFuzzyMatchingAttributeMapObject()!=null) {
                             verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
                             if(config.saveMetadata()) {
                                 ns.putShared("PingOneVerifyMetadata",verifyMetadata);
@@ -629,7 +615,7 @@ public class PingOneVerify implements Node {
     }
     public JSONObject createFuzzyMatchingAttributeMapObject () {
         JSONObject attributeMapping = new JSONObject();
-        if(config.fuzzyMatchingConfiguration().isEmpty()) {
+        if(config!=null && config.fuzzyMatchingConfiguration()!=null && config.fuzzyMatchingConfiguration().isEmpty()) {
             attributeMapping = null;
             return attributeMapping;
         }
