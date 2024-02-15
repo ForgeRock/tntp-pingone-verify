@@ -23,7 +23,7 @@
     <artifactId>p1verify</artifactId>
 
     <groupId>org.forgerock.am.tn</groupId>
-    <version>0.0.4</version>
+    <version>0.0.12</version>
     <name>PingOne Verify Node</name>
     <description>TBD</description>
 
