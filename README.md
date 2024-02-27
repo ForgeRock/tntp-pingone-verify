@@ -147,11 +147,30 @@ REGISTRATION (map verified document claims to objectProperties), VERIFICATION (m
 
 <tr>
 <td>
+Reference Photo
+</td>
+
+<td>
+If using the AUTHENTICATION flow type above, this parameter refers to the name of the attribute that contains the reference photo used to send to PingOne Verify. The attribute must exist either in the nodestate or in the local datastore.
+</td>
+</tr>
+
+<tr>
+<td>
 Age threshold
 </td>
 
 <td>
 If specified (in years), node will extract DOB from the claims and validate if equal or greater than specified (0 or empty to disable age check)
+</td>
+</tr>
+
+<tr>
+<td>
+Document Type Required for Registration
+</td>
+<td>
+Options are DEFAULT, DRIVING_LICENSE, PASSPORT, or ID_CARD.  Used only for REGISTRATION flow type
 </td>
 </tr>
 
@@ -200,12 +219,12 @@ Verification submission timeout in seconds. Value must be under authentication s
 
 <tr>
 <td>Imprecise matching attribute confidence map</td>
-<td>If selected, user's profile ds attribute is verified with imprecise matching in PingOne Verify (those attribute(s) must be present in 'attributes to match' object). Value represents minimum confidence level to mark verification successful (LOW/MEDIUM/HIGH)</td>
+<td>If selected, the user's attribute(s) are verified with imprecise matching in PingOne Verify (those attribute(s) must be present in the 'Attributes to match' configuration above). The value represents the minimum confidence level to mark a verification successful. Value options are LOW, MEDIUM, or HIGH.</td>
 </tr>
 
 <tr>
 <td>Attribute lookup</td>
-<td>Determines whether attribute lookup in DS should occur during VERIFICATION flow. If true, existing user is queried. Otherwise, objectAttributes in shared state are used</td>
+<td>If true, during a VERIFICATION flow type, the node will use the local datastore to lookup the 'Attributes to match' from the configuration above.  Otherwise, if false, objectAttributes in shared state are used.</td>
 </tr>
 
 <tr>
