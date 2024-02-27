@@ -72,7 +72,7 @@ The PingOne Verify node utilizes the PingOne Verify service to secure user verif
 
 ### Inputs
 ***
-Any data in the shared state that needs to be sent to PingOne Verify for verification or authentication purposes.
+Any data in the node state that needs to be sent to PingOne Verify for verification or authentication purposes.
 
 ### Dependencies
 ***
@@ -102,10 +102,10 @@ The configurable properties for this node are:
 
 <tr>
     <td>
-        PingOne Verify UserID attribute in DS
+        PingOne Verify UserID
     </td>
     <td>
-        Attribute name in DS for PingOne pseudoanonymized userId
+        Name of the local attribute to store the PingOne UserID
     </td>
 </tr>
 <tr>
@@ -122,7 +122,7 @@ The configurable properties for this node are:
         Verify URL delivery mode
     </td>
 <td>
-QR code to display or E-mail/SMS for direct delivery
+Options are QR code, E-mail and SMS
 </td>
 </tr>
 
@@ -141,7 +141,7 @@ Flow Type
 </td>
 
 <td>
-REGISTRATION (map verified document claims to objectProperties), VERIFICATION (match directory service attributes to verified document claims)
+REGISTRATION (map verified document claims to objectProperties), VERIFICATION (match directory service attributes to verified document claims), AUTHENTICATION (a new live photo (selfie) compared with a reference photo provided)
 </td>
 </tr>
 
@@ -151,7 +151,7 @@ Age threshold
 </td>
 
 <td>
-If specified (years), node will extract DOB from the claims and validate if equal or greater than specified (0 or empty to disable age check)
+If specified (in years), node will extract DOB from the claims and validate if equal or greater than specified (0 or empty to disable age check)
 </td>
 </tr>
 
@@ -185,17 +185,17 @@ Verification submission timeout in seconds. Value must be under authentication s
 
 <tr>
 <td>Attribute Map</td>
-<td>Map for picking which PingOne Verify Verified Claims should correspond with ForgeRockLDAP Attributes. The KEY should be the PingOne Verify JSON key and the VALUE should be the corresponding ForgeRock LDAP Attribute. This is used both for REGISTRATION and VERIFICATION scenarios (PingOne verify to ForgeRock and ForgeRock to PingOne Verify</td>
+<td>Map for picking which PingOne Verify Verified Claim(s) should correspond with the local datastore attribute(s). The KEY should be the PingOne Verify JSON key and the VALUE should be the corresponding local datastore attribute. This is used for the REGISTRATION and VERIFICATION scenarios (PingOne Verify to local datastore and local datastore to PingOne Verify)</td>
 </tr>
 
 <tr>
-<td>Attributes to match (ds names)</td>
-<td>Specify attributes (ds names) that have to match following successful verification by PingOne Verify (matching existing user attributes to verified claims)</td>
+<td>Attributes to match</td>
+<td>Specify the user attributes that have to match, following a successful verification by PingOne Verify (matching existing user attributes to verified claims)</td>
 </tr>
 
 <tr>
 <td>Preserve matched attributes</td>
-<td>If REGISTRATION uses attribute verification, tick this flag to preserve attributes that user provided prior to verification process. Otherwise PingOne Verify verified claims will override.</td>
+<td>If in a REGISTRATION flow type, tick this flag to preserve attributes that user provided prior to verification process. Otherwise the returned verified claims will be used.</td>
 </tr>
 
 <tr>
