@@ -17,30 +17,27 @@ user verification. These verifications include:
 
 Identity Cloud provides the following artifacts to enable the PingOne Verify Node:
 
-* PingOne service **TODO need to link to Service Docs**
-
-* PingOne Verify node **TODO need to link to Node below**
+* [PingOne service](https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep?tab=readme-ov-file#ping-one-service)
+* [PingOne Verify node](https://github.com/ForgeRock/tntp-pingone-verify/blob/final-marcin-mods/README.md#pingone-verify-node) 
 
 You must set up the following before using the PingOne Verify node:
 
 * [Create a verify policy](https://docs.pingidentity.com/r/en-us/pingone/pingone_creating_verify_policy)
 * [Create an application connection](https://apidocs.pingidentity.com/pingone/main/v1/api/#create-an-application-connection)
   * Requires [Identity Data Admin](https://apidocs.pingidentity.com/pingone/platform/v1/api/#roles) role
-* PingOne service
+* [PingOne service](https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep?tab=readme-ov-file#ping-one-service)
 
 For more information on this node, refer to PingOne Verify node
 
 ## PingOne Verify setup
-***
 You must set up the following before using the PingOne Verify node:
 
 * [Create a verify policy](https://docs.pingidentity.com/r/en-us/pingone/pingone_creating_verify_policy)
 * [Create an application connection](https://apidocs.pingidentity.com/pingone/main/v1/api/#create-an-application-connection)
   * Requires [Identity Data Admin](https://apidocs.pingidentity.com/pingone/platform/v1/api/#roles) role
-* PingOne service **TODO need to link to Service Docs**
+* [PingOne service](https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep?tab=readme-ov-file#ping-one-service)
 
 ## PingOne Verify node
-***
 The PingOne Verify node utilizes the PingOne Verify service to secure user verification.
 
 ### Compatibility
