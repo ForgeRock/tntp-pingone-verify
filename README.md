@@ -194,12 +194,12 @@ Verification submission timeout in seconds. Value must be under authentication s
 
 <tr>
 <td>Save verified claims from PingOne Verify to sharedState</td>
-<td>Saves verified claims from PingOne Verify API response to sharedState as a JSON object</td>
+<td>Saves verified claims from PingOne Verify API response to sharedState as a JSON object.  Name used - PingOneVerifyClaims</td>
 </tr>
 
 <tr>
 <td>Save verification metadata from PingOne Verify to sharedState</td>
-<td>Saves verification explanation data from PingOne Verify to sharedState as a JSON array</td>
+<td>Saves verification explanation data from PingOne Verify to sharedState as a JSON array. Name used - PingOneVerifyMetadata</td>
 </tr>
 
 <tr>
@@ -226,6 +226,18 @@ Verification submission timeout in seconds. Value must be under authentication s
 <td>Attribute lookup</td>
 <td>If true, during a VERIFICATION flow type, the node will use the local datastore to lookup the 'Attributes to match' from the configuration above.  Otherwise, if false, objectAttributes in shared state are used.</td>
 </tr>
+
+<tr>
+<td>Store access token in transientState</td>
+<td>If checked, PingOne access token will be preserved in transientState.  Name used - p1AccessToken</td>
+</tr>
+
+<tr>
+<td>Store PingOne Verify transaction id in transientState</td>
+<td>If checked, PingOne Verify transaction id will be preserved in transientState.  Name used - p1VtxId</td>
+</tr>
+
+
 
 <tr>
 <td>Demo mode</td>
