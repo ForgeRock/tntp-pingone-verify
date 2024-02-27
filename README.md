@@ -250,8 +250,10 @@ Verification submission timeout in seconds. Value must be under authentication s
 ### Outputs
 ***
 Depending on the configurations selected, the following may be the output for this node:
-* Verified claims from PingOne Verify
-* Verification metadata from PingOne Verify
+* Verified claims from PingOne Verify - PingOneVerifyClaims
+* Verification metadata from PingOne Verify - PingOneVerifyMetadata
+* Access Token used to communicate with the PingOne Verify APIs - p1AccessToken
+* Transaction ID returned from PingOne Verify - p1VtxId
 
 ### Outcomes
 ***
@@ -284,5 +286,3 @@ If this node logs an error, review the log messages to find the reason for the e
 This example journey highlights the use of the PingOne Verify node for a Registration
 
 ![ScreenShot](./example.png)
-
-
