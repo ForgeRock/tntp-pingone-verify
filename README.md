@@ -18,7 +18,7 @@ user verification. These verifications include:
 Identity Cloud provides the following artifacts to enable the PingOne Verify Node:
 
 * [PingOne service](https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep?tab=readme-ov-file#ping-one-service)
-* [PingOne Verify node](https://github.com/ForgeRock/tntp-pingone-verify/blob/final-marcin-mods/README.md#pingone-verify-node) 
+* [PingOne Verify node](https://github.com/ForgeRock/tntp-pingone-verify/blob/final-marcin-mods/README.md#pingone-verify-node)
 
 You must set up the following before using the PingOne Verify node:
 
@@ -237,7 +237,7 @@ Failed to get verified data
 Reasons for Error could be that the session expired, UserID not defined, or value
 missing in shared state
 
-`ID No Match`
+`No ID Match`
 
 The PingOne pseudoanonymized userId provided (store on the user or in SharedState), does not match any ID in PingOne
 
