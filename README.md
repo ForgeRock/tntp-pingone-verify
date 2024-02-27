@@ -239,7 +239,7 @@ missing in shared state
 
 `No ID Match`
 
-The PingOne pseudoanonymized userId provided (store on the user or in SharedState), does not match any ID in PingOne
+The PingOne pseudoanonymized userId provided (stored on the user or in SharedState), does not match any ID in PingOne
 
 `Age Failed`
 
