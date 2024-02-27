@@ -1,84 +1,107 @@
 <!--
- * The contents of this file are subject to the terms of the Common Development and
- * Distribution License (the License). You may not use this file except in compliance with the
- * License.
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services. Ping Identity Corporation only offers such software or services to legal entities who have entered into a binding license agreement with Ping Identity Corporation.
  *
- * You can obtain a copy of the License at legal/CDDLv1.0.txt. See the License for the
- * specific language governing permission and limitations under the License.
- *
- * When distributing Covered Software, include this CDDL Header Notice in each file and include
- * the License file at legal/CDDLv1.0.txt. If applicable, add the following below the CDDL
- * Header, with the fields enclosed by brackets [] replaced by your own identifying
- * information: "Portions copyright [year] [name of copyright owner]".
- *
- * Copyright 2023 ForgeRock AS.
+ * Copyright 2024 Ping Identity Corporation. All Rights Reserved
 -->
-# PingOneVerify
 
-A simple authentication node for ForgeRock's [Identity Platform][forgerock_platform] 7.3.0 and above. This node utilizes the PingOne Verify service to enable sercure user verification based on a government-issued document and live face capture (a selfie).
+# PingOne Verify
+
+The PingOne Verify node utilizes the PingOne Verify service to enable four different types of secure
+user verification. These verifications include:
+* [Government ID](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
+* [Facial Comparison Government ID](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
+* [Facial Comparison Reference Selfie](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
+* [Liveness](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
+
+> At this time, no other PingOne Verification is supported by this node.
+
+Identity Cloud provides the following artifacts to enable the PingOne Verify Node:
+
+* PingOne service **TODO need to link to Service Docs**
+
+* PingOne Verify node **TODO need to link to Node below**
+
+You must set up the following before using the PingOne Verify node:
+
+* [Create a verify policy](https://docs.pingidentity.com/r/en-us/pingone/pingone_creating_verify_policy)
+* [Create an application connection](https://apidocs.pingidentity.com/pingone/main/v1/api/#create-an-application-connection)
+  * Requires [Identity Data Admin](https://apidocs.pingidentity.com/pingone/platform/v1/api/#roles) role
+* PingOne service
+
+For more information on this node, refer to PingOne Verify node
+
+## PingOne Verify setup
+***
+You must set up the following before using the PingOne Verify node:
+
+* [Create a verify policy](https://docs.pingidentity.com/r/en-us/pingone/pingone_creating_verify_policy)
+* [Create an application connection](https://apidocs.pingidentity.com/pingone/main/v1/api/#create-an-application-connection)
+  * Requires [Identity Data Admin](https://apidocs.pingidentity.com/pingone/platform/v1/api/#roles) role
+* PingOne service **TODO need to link to Service Docs**
+
+## PingOne Verify node
+***
+The PingOne Verify node utilizes the PingOne Verify service to secure user verification.
+
+### Compatibility
+***
+
+<table>
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead>
+<tr>
+<th>Product</th>
+<th>Compatible?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><p>ForgeRock Identity Cloud</p></td>
+<td><p><span><i>✓</i></span></p></td>
+</tr>
+<tr>
+<td><p>ForgeRock Access Management (self-managed)</p></td>
+<td><p><span><i>✓</i></span></p></td>
+</tr>
+<tr>
+<td><p>ForgeRock Identity Platform (self-managed)</p></td>
+<td><p><span class="icon"><i class="fa fa-check" title="yes">✓</i></span></p></td>
+</tr>
+</tbody>
+</table>
+
+### Inputs
+***
+Any data in the shared state that needs to be sent to PingOne Verify for verification or authentication purposes.
+
+### Dependencies
+***
+To use this node, you must configure the PingOne service.
 
 
-## Before you begin
-
-Regardless of the configuration method you choose you'll need
-
-<ul>
-<li>A <span>PingOne</span> account with at least one environment that includes the <span class="keyword">PingOne Verify</span> service.<p class="p">For more information, see <a class="xref" href="https://docs.pingidentity.com/r/en-us/pingone/p1_start_a_pingone_trial?tocId=WnDBFzVrhcZcDTKV8jBNJQ" target="_blank" data-ft-click-interceptor="ft-internal-link">Starting a <span class="keyword">PingOne</span> trial</a> and <a class="xref" href="https://docs.pingidentity.com/r/en-us/pingone/pingone_tutorial_passwordless_create_environment?tocId=iMH1irb9RViMCilbTCCLEg" target="_blank" data-ft-click-interceptor="ft-internal-link">Creating an environment</a>.</p></li>
-<li class="li">A <span class="keyword">PingOne Verify</span> policy.<p class="p">For more information on configuring a policy, see <a class="xref ft-internal-link" href="https://docs.pingidentity.com/r/0ue6NPmZLPN667l6iXUjRg/jWR8wPQq~vaG7r0cfQL~fA" title="A verify policy dictates what is required to verify a user, such as an ID verification, facial comparison, or liveness." data-ft-click-interceptor="ft-internal-link">Creating a verify policy</a>.</p></li>
-</ul>
+### Configuration
+***
+The configurable properties for this node are:
 
 
-There are four ways to configure PingOne Verify:
-
-<ul>
-<li>API integration</li>
-<li>PingOne DaVinci</li>
-<li>PingFederate Integration Kit</li>
-<li>Mobile SDK</li>
-</ul>
-
-The configuration method that you choose depends on your role.
-Click here to learn more <a href="https://docs.pingidentity.com/r/en-us/pingone/pingone_verify_getting_started_configuring">(Configuring PingOne Verify)</a>
-
-## Inputs
-
-`None`
-<table class="table frame-all" id="jzf1692634635960__table_y2d_vml_nyb"><colgroup><col style="width:33.33333333333333%"><col style="width:66.66666666666666%"></colgroup><thead class="thead">
-						<tr class="row">
+<table><colgroup><col><col></colgroup><thead>
+						<tr>
 							<th class="entry colsep-1 rowsep-1" id="jzf1692634635960__table_y2d_vml_nyb__entry__1">Property</th>
 							<th class="entry colsep-1 rowsep-1" id="jzf1692634635960__table_y2d_vml_nyb__entry__2">Usage</th>
 						</tr>
 					</thead><tbody class="tbody">
 						<tr class="row">
 							<td class="entry colsep-1 rowsep-1" headers="jzf1692634635960__table_y2d_vml_nyb__entry__1">
-								<p class="p">PingOne Environment ID</p>
+								<p class="p">PingOne Service</p>
 							</td>
 							<td class="entry colsep-1 rowsep-1" headers="jzf1692634635960__table_y2d_vml_nyb__entry__2">
-                PingOne Environmnent ID (Environment->Properties->Environment ID in PingOne console)</td>
+                The PingOne Service used for this Verify Node</td>
 						</tr>
-						<tr class="row">
-							<td class="entry colsep-1 rowsep-1" headers="jzf1692634635960__table_y2d_vml_nyb__entry__1">
-                                PingOne client_id</td>
-							<td class="entry colsep-1 rowsep-1" headers="jzf1692634635960__table_y2d_vml_nyb__entry__2">
-								PingOne client_id for the Verify API</td>
-						</tr>
-						<tr class="row">
-							<td class="entry colsep-1 rowsep-1" headers="jzf1692634635960__table_y2d_vml_nyb__entry__1">
-								<p class="p">PingOne client_secret
-</p>
-							</td>
-							<td class="entry colsep-1 rowsep-1" headers="jzf1692634635960__table_y2d_vml_nyb__entry__2">
-								PingOne client_secret for the verify API client_id
-							</td>
-						</tr>
-<tr>
-    <td>
-       PingOne Verify Region
-    </td>
-    <td>
-        PingOne Verify Region
-    </td>
-</tr>
+
+
 
 <tr>
     <td>
@@ -196,42 +219,42 @@ Verification submission timeout in seconds. Value must be under authentication s
 </tbody></table>
 
 
+### Outputs
+***
+Depending on the configurations selected, the following may be the output for this node:
+* Verified claims from PingOne Verify
+* Verification metadata from PingOne Verify
 
-Copy the .jar file from the ../target directory into the ../web-container/webapps/openam/WEB-INF/lib directory where AM is deployed.  Restart the web container to pick up the new node.  The node will then appear in the authentication trees components palette.
-
-
-## Outputs
-
-`Verified user's data`
-
-## Outcomes
-
+### Outcomes
+***
 `Success`
 
 Successful attempt to get verified data
-
 
 `Fail`
 
 Failed to get verified data
 
-
 `Error`
 
 Reasons for Error could be that the session expired, UserID not defined, or value
-missing in shared state 
+missing in shared state
 
+`ID No Match`
 
-## Troubleshooting
+The PingOne pseudoanonymized userId provided (store on the user or in SharedState), does not match any ID in PingOne
 
-<p dir="auto">If this node logs an error, review the log messages the find the reason for the error and address the issue appropriately. There are also many publicly accessible test endpoints which can be used to help test and troubleshoot with this node. For example <a href="https://httpstat.us" rel="nofollow">https://httpstat.us</a> and <a href="https://postman-echo.com" rel="nofollow">https://postman-echo.com</a>.</p>
+`Age Failed`
 
+The age limit set, was not met
+### Troubleshooting
+***
+If this node logs an error, review the log messages to find the reason for the error and address the issue appropriately.
 
-## Examples
-
-This example journey highlights the use of the PingOne Verify node to authenticate 
+### Examples
+***
+This example journey highlights the use of the PingOne Verify node for a Registration
 
 ![ScreenShot](./example.png)
 
-        
 
