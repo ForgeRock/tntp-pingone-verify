@@ -41,6 +41,7 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 import javax.security.auth.callback.TextOutputCallback;
 
+import it.unimi.dsi.fastutil.objects.ObjectHeaps;
 import org.forgerock.json.JsonValue;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.*;
@@ -81,10 +82,18 @@ public class PingOneVerify implements Node {
         else return "com";
     }
     public enum UserNotification { QR, SMS, EMAIL }
-    public enum FlowType { REGISTRATION, VERIFICATION }
+    public enum FlowType { REGISTRATION, VERIFICATION, AUTHENTICATION }
+	public enum GovId { DEFAULT, DRIVING_LICENSE, PASSPORT, ID_CARD }
 
+    public String getGovId(GovId govId) {
+        if (govId == GovId.DEFAULT) {return "DEFAULT";}
+        else if(govId == GovId.DRIVING_LICENSE) {return "DRIVING_LICENSE";}
+        else if(govId == GovId.ID_CARD) {return "ID_CARD";}
+        else return "PASSPORT";
+    }
     public String getFlowType(FlowType flowType) {
         if (flowType == FlowType.REGISTRATION) {return "REGISTRATION";}
+		else if(flowType == FlowType.AUTHENTICATION) {return "AUTHENTICATION";}
         else return "VERIFICATION";
     }
     public int getDeliveryMethod(UserNotification userNotification) {
@@ -99,6 +108,10 @@ public class PingOneVerify implements Node {
     public String verifiedClaims;
     public String verifyStatus;
     public String verifyMetadata;
+    public String selfie = "";
+    public String docFront = "";
+    public String docPic = "";
+    public String docType;
     public JSONObject userAttributesDsJson = new JSONObject();
     private final CoreWrapper coreWrapper;
     private static final String FAIL = "FAIL";
@@ -153,6 +166,16 @@ public class PingOneVerify implements Node {
         default String userIdAttribute() {
             return "";
         }
+        @Attribute(order = 145)
+        default String userSelfieAttribute() {
+            return "";
+        }
+        @Attribute(order = 146)
+        default String docFrontAttribute() {
+            return "";
+        }
+        @Attribute(order = 147)
+        default String docPicAttribute() { return ""; }
         @Attribute(order = 150)
         default String verifyPolicyId() {
             return "";
@@ -171,6 +194,10 @@ public class PingOneVerify implements Node {
         default int dobVerification() {return 0;}
         @Attribute(order = 200)
         default boolean failExpired() {return false;}
+        @Attribute(order = 205)
+        default GovId govId() {
+            return GovId.DEFAULT;
+        }
         @Attribute(order = 210)
         default int timeOut() {
             return 270;
@@ -189,6 +216,10 @@ public class PingOneVerify implements Node {
                 put("cn", "fullName");
                 put("postalAddress", "address");
                 put("country", "country");
+                put("birthDateAttribute", "birthDate");
+                put("idNumberAttribute", "idNumber");
+                put("idTypeAttribute", "idType");
+                put("expirationDateAttribute", "expirationDate");
             }};
         }
         @Attribute(order = 250)
@@ -196,11 +227,26 @@ public class PingOneVerify implements Node {
         @Attribute(order = 260)
         default boolean preserveAttributes() { return true; }
         @Attribute(order = 270)
-        Map<String, String> fuzzyMatchingConfiguration();
+        default Map<String, String> fuzzyMatchingConfiguration() {
+            return new HashMap<String, String>() {{
+                /* key is DS attribute name,
+                value is the confidence level required for success */
+                put("givenName", "LOW");
+                put("sn", "HIGH");
+                put("address", "LOW");
+                put("cn", "MEDIUM");
+                put("birthDateAttribute", "MEDIUM");
+            }};
+        }
         @Attribute(order = 280)
         default boolean attributeLookup() { return false; }
         @Attribute(order = 290)
+        default boolean tsAccessToken() { return false; }
+        @Attribute(order = 300)
+        default boolean tsTransactionId() { return false; }
+        @Attribute(order = 310)
         default boolean demoMode() { return false; }
+
     }
 
 
@@ -222,6 +268,61 @@ public class PingOneVerify implements Node {
         NodeState ns = context.getStateFor(this);
         try {
             logger.debug(loggerPrefix + "Started");
+
+            int aaa=1;
+            if(aaa==0) {
+                String aT="eyJhbGciOiJSUzI1NiIsImtpZCI6ImRlZmF1bHQifQ.eyJjbGllbnRfaWQiOiJlNmY3NWE1Zi1hNzVkLTRmZTktODQ2Mi03ODNlNDQ5MmEyNjUiLCJpc3MiOiJodHRwczovL2F1dGgucGluZ29uZS5ldS81YzYwM2E1Ni1jOTQxLTQyYTEtOWZjZC0yZjYzMjEzZTk5OWUvYXMiLCJpYXQiOjE3MDc3NDg1MjEsImV4cCI6MTcwNzc1MjEyMSwiYXVkIjpbImh0dHBzOi8vYXBpLnBpbmdvbmUuZXUiXSwiZW52IjoiNWM2MDNhNTYtYzk0MS00MmExLTlmY2QtMmY2MzIxM2U5OTllIiwib3JnIjoiODg1NjgwY2YtYTM3Yi00ZjdjLTk2ZGQtZjQ2ZmMyMjU0Nzg2In0.DQe2JURXdzpmkOJvH58rz5G2jDqCtxxYYapQU72msd_MEpHtzRSQEuhhrIAn7r2oPREBVtrhvABqLSceqOrgDPhZvFJE2smfyjXS3JH3k6e5dENd4Ca-5oeQ9dF8ZXeuOO-nWRlvlWZlbemRXkjNgGipvgpJ6UvQ-fa4gNnnipnJUfFu1zxl2_iZ6JUrXLgwa_iGe9adBY9QkdfRA3rRS7ZhnzBfIqJT2srX156ZMRf3FtacVheOQ4ZDz-OC5Mfq5aunQNLPanxp7w1Bw3bDRSn488wrQkHIfsr06LjQV-O5Ff9gXX285yY9wy1l-JFoWvyd9cqgdO0Xx4DUVVXGlg";
+                String response = "{\n" +
+                        "    \"_links\": {\n" +
+                        "        \"environment\": {\n" +
+                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e\"\n" +
+                        "        },\n" +
+                        "        \"verifyTransaction\": {\n" +
+                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/435d2704-e4f1-47e7-abd4-0d37068be44c/verifyTransactions/42503b3b-5498-4247-b260-e4a98742bf9f\"\n" +
+                        "        },\n" +
+                        "        \"self\": {\n" +
+                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/435d2704-e4f1-47e7-abd4-0d37068be44c/verifyTransactions/42503b3b-5498-4247-b260-e4a98742bf9f/verifiedData\"\n" +
+                        "        },\n" +
+                        "        \"user\": {\n" +
+                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/435d2704-e4f1-47e7-abd4-0d37068be44c\"\n" +
+                        "        }\n" +
+                        "    },\n" +
+                        "    \"_embedded\": {\n" +
+                        "        \"verifiedData\": [\n" +
+                        "            {\n" +
+                        "                \"_links\": {\n" +
+                        "                    \"self\": {\n" +
+                        "                        \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/435d2704-e4f1-47e7-abd4-0d37068be44c/verifyTransactions/42503b3b-5498-4247-b260-e4a98742bf9f/verifiedData/971ffa79-3cf8-3e41-82aa-ca38ed84da14\"\n" +
+                        "                    }\n" +
+                        "                },\n" +
+                        "                \"id\": \"971ffa79-3cf8-3e41-82aa-ca38ed84da14\",\n" +
+                        "                \"type\": \"SELFIE\",\n" +
+                        "                \"data\": {\n" +
+                        "                    \"FORMAT\": \"JPEG\",\n" +
+                        "                    \"IMAGE\": \"thisismyimage\"\n" +
+                        "                },\n" +
+                        "                \"createdAt\": \"2024-02-12T14:01:06.514Z\"\n" +
+                        "            }\n" +
+                        "        ]\n" +
+                        "    },\n" +
+                        "    \"size\": 1\n" +
+                        "}";
+                String envId="5c603a56-c941-42a1-9fcd-2f63213e999e";
+                String userId ="435d2704-e4f1-47e7-abd4-0d37068be44c";
+                String txId="be1199ef-4803-438a-a372-48a5123fd764";
+
+                String selfie = "";
+                //selfie = verifyApiSelfieToJpeg(getVerifySelfie(aT,getVerifyEndpointUrl(envId),txId));
+                selfie = getVerifyPic(aT,getVerifyEndpointUrl(userId),txId, "SELFIE");
+                ns.putShared("debug-selfie",selfie);
+                selfie = verifyApiBase64ToJpeg(selfie);
+                ns.putShared("debug-selfie2",selfie);
+
+
+                return Action.goTo(ERROR).build();
+            }
+
+
 
             /* check if we have PingOne Verify User ID attribute in config */
             if(config.userIdAttribute() == null) {
@@ -289,6 +390,7 @@ public class PingOneVerify implements Node {
                     } else {
                         /* sharedState missing PingOne Verify userId attribute */
                         p1vUserId = getP1uidFromDS(ns);
+                        //ns.putShared("debug-id",p1vUserId);
                     }
                     if(p1vUserId.isEmpty()) {
                         /* something went wrong - we don't have user attribute */
@@ -347,7 +449,7 @@ public class PingOneVerify implements Node {
                     }
                 }
                 /* create PingOne Verify transaction */
-                String verifyTxBody = createTransactionCallBody(config.verifyPolicyId(), telephoneNumber, emailAddress, createFuzzyMatchingAttributeMapObject());
+                String verifyTxBody = createTransactionCallBody(config.verifyPolicyId(), telephoneNumber, emailAddress, createFuzzyMatchingAttributeMapObject(), ns);
                 String verifyTxResponse = createVerifyTransaction(p1AccessToken, getVerifyEndpointUrl(p1vUserId), verifyTxBody);
                 if (verifyTxResponse.indexOf("error")==0) {
                     ns.putShared("PingOneTransactionError", verifyTxResponse);
@@ -408,16 +510,22 @@ public class PingOneVerify implements Node {
                             ns.putShared("PingOneVerifyMetadata",verifyMetadata);
                         }
                     }
+                    /* Leaving token and transaction id behind in transientState if needed */
+                    transientStateResidue(ns, accessToken, verifyTxId);
+
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
                         /* We need to fetch the verifiedData claims */
                         if(!config.demoMode()) {
-                            verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                            if(!Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION")) {
+                                /* not fetching claims for AUTHENTICATION flow */
+                                verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                            }
                         } else {
                             /*we are in demo mode, returning example dataset*/
                             verifiedClaims = verifiedClaimsDemo;
                         }
-                        if(verifiedClaims.indexOf("error")==0) {
+                        if(verifiedClaims!=null && verifiedClaims.indexOf("error")==0) {
                             /* failed to fetch the verifiedData from PingOne Verify */
                             ns.putShared("PingOneVerifyFailedToGetVerifiedData","true");
                             ns.putShared("PingOneAccessToken","");
@@ -429,28 +537,82 @@ public class PingOneVerify implements Node {
                                 ns.putShared("PingOneVerifyMetadata",verifyMetadata);
                             }
                         }
+                        if(config.userSelfieAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
+                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
+                            selfie = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"SELFIE"));
+                            if(Objects.equals(selfie,"error")) {
+                                selfie = "";
+                            }
+                        }
+                        if(config.docFrontAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
+                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
+                            docFront = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"CROPPED_DOCUMENT"));
+                            if(Objects.equals(docFront,"error")) {
+                                docFront = "";
+                            }
+                        }
+                        if(config.docPicAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
+                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
+                            docPic = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"CROPPED_PORTRAIT"));
+                            if(Objects.equals(docPic,"error")) {
+                                docPic = "";
+                            }
+                        }
                         if(onResultSuccess(ns)){
-                            JSONObject claims = new JSONObject(verifiedClaims);
-                            ns.putShared("userAttributesDsJson", "");
-                            ns.putShared("PingOneAccessToken", "");
+                            if(!Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION")) {
 
-                            if(config.failExpired()) {
-                                /* check expiration date */
-                                if (claims.has("expirationDate")) {
-                                    /* there is expiration date in the verified claims */
-                                    if (!validateDocumentExpiration(claims.getString("expirationDate"))) {
-                                        /* document expired */
-                                        ns.putShared("PingOneVerifyDocumentExpired","true");
-                                        return Action.goTo(FAIL).build();
+                                JSONObject claims = new JSONObject(verifiedClaims);
+                                ns.putShared("userAttributesDsJson", "");
+                                ns.putShared("PingOneAccessToken", "");
+
+                                if (config.failExpired()) {
+                                    /* check expiration date */
+                                    if (claims.has("expirationDate")) {
+                                        /* there is expiration date in the verified claims */
+                                        if (!validateDocumentExpiration(claims.getString("expirationDate"))) {
+                                            /* document expired */
+                                            ns.putShared("PingOneVerifyDocumentExpired", "true");
+                                            return Action.goTo(FAIL).build();
+                                        }
                                     }
                                 }
-                            }
-
-                            if (config.dobVerification() > 0 && Objects.equals(getFlowType(config.flowType()), "REGISTRATION")) {
-                                if (calculateAge(ns, claims.getString("birthDate")) >= config.dobVerification()) {
-                                    //return Action.goTo(SUCCESS).build();
-                                } else {
-                                    return Action.goTo(AGEFAILED).build();
+                                if (config.dobVerification() > 0 && Objects.equals(getFlowType(config.flowType()), "REGISTRATION")) {
+                                    if (calculateAge(ns, claims.getString("birthDate")) >= config.dobVerification()) {
+                                        //return Action.goTo(SUCCESS).build();
+                                    } else {
+                                        return Action.goTo(AGEFAILED).build();
+                                    }
+                                }
+                                if (!Objects.equals(getGovId(config.govId()), "DEFAULT")) {
+                                    /* a specific document type was required */
+                                    if (claims.has("idType")) {
+                                        String documentType = claims.getString("idType");
+                                        if (Objects.equals(getGovId(config.govId()), "DRIVING_LICENSE")) {
+                                            /* drivers license was required */
+                                            if (!documentType.contains("DriversLicenseFront")) {
+                                                /* no drivers license found in verifiedClaims */
+                                                ns.putShared("PingOneVerifyDocumentTypeMismatch", "true");
+                                                return Action.goTo(FAIL).build();
+                                            }
+                                        } else if (Objects.equals(getGovId(config.govId()), "PASSPORT")) {
+                                            /* passport was required */
+                                            if (!documentType.contains("PassportPicturePage")) {
+                                                /* no passport found in verifiedClaims */
+                                                ns.putShared("PingOneVerifyDocumentTypeMismatch", "true");
+                                                return Action.goTo(FAIL).build();
+                                            }
+                                        } else {
+                                            if (!documentType.contains("IdentificationCardFront")) {
+                                                /* no id card found in verifiedClaims */
+                                                ns.putShared("PingOneVerifyDocumentTypeMismatch", "true");
+                                                return Action.goTo(FAIL).build();
+                                            }
+                                        }
+                                    } else {
+                                        /* cannot determine document type */
+                                        ns.putShared("PingOneVerifyDocumentTypeUndetermined", "true");
+                                        return Action.goTo(FAIL).build();
+                                    }
                                 }
                             }
                             return Action.goTo(SUCCESS).build();
@@ -511,43 +673,110 @@ public class PingOneVerify implements Node {
                             ns.putShared("PingOneVerifyMetadata",verifyMetadata);
                         }
                     }
+                    /* Leaving token and transaction id behind in transientState if needed */
+                    transientStateResidue(ns, accessToken, verifyTxId);
+
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
                         /* We need to fetch the verifiedData claims */
                         if(!config.demoMode()) {
-                            verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                            if(!Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION")) {
+                                /* not fetching claims for AUTHENTICATION flow */
+                                verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                            }
                         } else {
                             /*we are in demo mode, returning example dataset*/
                            verifiedClaims = verifiedClaimsDemo;
                         }
-                        if(verifiedClaims.indexOf("error")==0) {
+                        if(verifiedClaims!=null && verifiedClaims.indexOf("error")==0) {
                             /* failed to fetch the verifiedData from PingOne Verify */
                             ns.putShared("PingOneVerifyFailedToGetVerifiedData","true");
                             ns.putShared("PingOneAccessToken","");
                             return Action.goTo(FAIL).build();
                         }
-                        if(onResultSuccess(ns)) {
-                            JSONObject claims = new JSONObject(verifiedClaims);
-                            ns.putShared("userAttributesDsJson", "");
-                            ns.putShared("PingOneAccessToken", "");
+                        if(config.saveMetadata() || createFuzzyMatchingAttributeMapObject()!=null) {
+                            verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                            if(config.saveMetadata()) {
+                                ns.putShared("PingOneVerifyMetadata",verifyMetadata);
+                            }
+                        }
+                        if(config.userSelfieAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
+                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
+                            selfie = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"SELFIE"));
+                            if(Objects.equals(selfie,"error")) {
+                                selfie = "";
+                            }
+                        }
+                        if(config.docFrontAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
+                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
+                            docFront = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"CROPPED_DOCUMENT"));
+                            if(Objects.equals(docFront,"error")) {
+                                docFront = "";
+                            }
+                        }
+                        if(config.docPicAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
+                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
+                            docPic = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"CROPPED_PORTRAIT"));
+                            if(Objects.equals(docPic,"error")) {
+                                docPic = "";
+                            }
+                        }
 
-                            if(config.failExpired()) {
-                                /* check expiration date */
-                                if (claims.has("expirationDate")) {
-                                    /* there is expiration date in the verified claims */
-                                    if (!validateDocumentExpiration(claims.getString("expirationDate"))) {
-                                        /* document expired */
-                                        ns.putShared("PingOneVerifyDocumentExpired","true");
-                                        return Action.goTo(FAIL).build();
+                        if(onResultSuccess(ns)) {
+                            if(!Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION")) {
+                                /* we are only doing checks for REGISTRATION and VERIFICATIO */
+                                JSONObject claims = new JSONObject(verifiedClaims);
+                                ns.putShared("userAttributesDsJson", "");
+                                ns.putShared("PingOneAccessToken", "");
+
+                                if (config.failExpired()) {
+                                    /* check expiration date */
+                                    if (claims.has("expirationDate")) {
+                                        /* there is expiration date in the verified claims */
+                                        if (!validateDocumentExpiration(claims.getString("expirationDate"))) {
+                                            /* document expired */
+                                            ns.putShared("PingOneVerifyDocumentExpired", "true");
+                                            return Action.goTo(FAIL).build();
+                                        }
                                     }
                                 }
-                            }
-
-                            if (config.dobVerification() > 0 && Objects.equals(getFlowType(config.flowType()), "REGISTRATION")) {
-                                if (calculateAge(ns, claims.getString("birthDate")) >= config.dobVerification()) {
-                                    //return Action.goTo(SUCCESS).build();
-                                } else {
-                                    return Action.goTo(AGEFAILED).build();
+                                if (config.dobVerification() > 0 && Objects.equals(getFlowType(config.flowType()), "REGISTRATION")) {
+                                    if (calculateAge(ns, claims.getString("birthDate")) >= config.dobVerification()) {
+                                        //return Action.goTo(SUCCESS).build();
+                                    } else {
+                                        return Action.goTo(AGEFAILED).build();
+                                    }
+                                }
+                                if (!Objects.equals(getGovId(config.govId()), "DEFAULT")) {
+                                    /* a specific document type was required */
+                                    if (claims.has("idType")) {
+                                        String documentType = claims.getString("idType");
+                                        if (Objects.equals(getGovId(config.govId()), "DRIVING_LICENSE")) {
+                                            /* drivers license was required */
+                                            if (!documentType.contains("DriversLicenseFront")) {
+                                                /* no drivers license found in verifiedClaims */
+                                                ns.putShared("PingOneVerifyDocumentTypeMismatch", "true");
+                                                return Action.goTo(FAIL).build();
+                                            }
+                                        } else if (Objects.equals(getGovId(config.govId()), "PASSPORT")) {
+                                            /* passport was required */
+                                            if (!documentType.contains("PassportPicturePage")) {
+                                                /* no passport found in verifiedClaims */
+                                                ns.putShared("PingOneVerifyDocumentTypeMismatch", "true");
+                                                return Action.goTo(FAIL).build();
+                                            }
+                                        } else {
+                                            if (!documentType.contains("IdentificationCardFront")) {
+                                                /* no id card found in verifiedClaims */
+                                                ns.putShared("PingOneVerifyDocumentTypeMismatch", "true");
+                                                return Action.goTo(FAIL).build();
+                                            }
+                                        }
+                                    } else {
+                                        /* cannot determine document type */
+                                        ns.putShared("PingOneVerifyDocumentTypeUndetermined", "true");
+                                        return Action.goTo(FAIL).build();
+                                    }
                                 }
                             }
                             return Action.goTo(SUCCESS).build();
@@ -589,7 +818,7 @@ public class PingOneVerify implements Node {
             /* check successful */
             /* checks failed */
             return validateVerifiedClaims(ns, verifiedClaims);
-        } else {
+        } else if (Objects.equals(getFlowType(config.flowType()), "REGISTRATION")){
             /* for REGISTRATION checks are only needed if configured
             but we are mapping claims to objectAttributes */
             verifiedClaimsToSharedState(ns,verifiedClaims);
@@ -600,6 +829,17 @@ public class PingOneVerify implements Node {
                 /* attribute matching not required */
                 return true;
             }
+        } else {
+            /* no additional tasks for AUTHENTICATION flow */
+            return true;
+        }
+    }
+    public void transientStateResidue(NodeState ns, String p1AccessToken, String txId) {
+        if(p1AccessToken!=null && !Objects.equals(p1AccessToken,"") && config.tsAccessToken()) {
+            ns.putTransient("p1AccessToken",p1AccessToken);
+        }
+        if(txId!=null && !Objects.equals(p1AccessToken,"") && config.tsTransactionId()) {
+            ns.putTransient("p1VtxId",txId);
         }
     }
     public String dsAttributeToVerifiedClaim (String dsAttribute) {
@@ -615,7 +855,7 @@ public class PingOneVerify implements Node {
     }
     public JSONObject createFuzzyMatchingAttributeMapObject () {
         JSONObject attributeMapping = new JSONObject();
-        if(config!=null && config.fuzzyMatchingConfiguration()!=null && config.fuzzyMatchingConfiguration().isEmpty()) {
+        if(config.fuzzyMatchingConfiguration().isEmpty()) {
             attributeMapping = null;
             return attributeMapping;
         }
@@ -653,6 +893,20 @@ public class PingOneVerify implements Node {
         ns.putShared("userAttributesDsJson",userAttributesDsJson.toString());
         return true;
     }
+    public String getSelfie (NodeState ns) throws IdRepoException, SSOException {
+        if(ns.isDefined(config.userSelfieAttribute())) {
+            return ns.get(config.userSelfieAttribute()).toString();
+        }
+        /* no identifier in sharedState, fetch from DS */
+        String userName = ns.get(USERNAME).asString();
+        String realm = ns.get(REALM).asString();
+        /* get user attribute from ds */
+        String userIdentifier = "";
+        userIdentifier = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm).getAttribute(config.userSelfieAttribute()).toString();
+
+        userIdentifier = userIdentifier.replaceAll("[\\[\\]\\\"]", "");
+        return userIdentifier;
+    }
     public String getP1uidFromDS (NodeState ns) throws IdRepoException, SSOException {
         if(ns.isDefined(config.userIdAttribute())) {
             return ns.get(config.userIdAttribute()).toString();
@@ -663,6 +917,7 @@ public class PingOneVerify implements Node {
         /* get user attribute from ds */
         String userIdentifier = "";
         userIdentifier = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm).getAttribute(config.userIdAttribute()).toString();
+
         userIdentifier = userIdentifier.replaceAll("[\\[\\]\\\"]", "");
         return userIdentifier;
 
@@ -814,6 +1069,16 @@ public class PingOneVerify implements Node {
                 }
             }
         }
+        if(!Objects.equals(selfie,"")) {
+            ns.putTransient(config.userSelfieAttribute(),selfie);
+        }
+        if(!Objects.equals(docFront,"")) {
+            ns.putTransient(config.docFrontAttribute(),docFront);
+        }
+        if(!Objects.equals(docPic,"")) {
+            ns.putTransient(config.docPicAttribute(),docPic);
+        }
+
         ns.putShared("objectAttributes",objectAttributes);
         return true;
     }
@@ -935,7 +1200,6 @@ public class PingOneVerify implements Node {
         }
         return "error";
     }
-
     public int checkVerifyResult(String verifyResponse) {
         try {
             JSONObject obj = new JSONObject(verifyResponse);
@@ -958,6 +1222,23 @@ public class PingOneVerify implements Node {
             return 2; /*pending*/
         }
     }
+    String verifyApiBase64ToJpeg(String apiResponse) {
+        try {
+            JSONObject obj = new JSONObject(apiResponse);
+            JSONArray jsonArray;
+            String result = "";
+            jsonArray = obj.getJSONObject("_embedded").getJSONArray("verifiedData");
+
+            JSONObject obj2 = new JSONObject(jsonArray.getJSONObject(0).toString());
+            result = obj2.getJSONObject("data").getString("IMAGE");
+            return result;
+        } catch (Exception ex) {
+            return "error";
+        }
+    }
+
+
+
     public static String getVerifiedData(String accessToken, String endpoint, String vTxId) {
         String resultEndpoint = endpoint + "/" + vTxId + "/verifiedData?type=GOVERNMENT_ID";
         StringBuffer response = new StringBuffer();
@@ -1001,6 +1282,43 @@ public class PingOneVerify implements Node {
     }
     public static String getVerifyResult(String accessToken, String endpoint, String vTxId) {
         String resultEndpoint = endpoint + "/" + vTxId;
+        StringBuffer response = new StringBuffer();
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(resultEndpoint);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(4000);
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            conn.setRequestMethod("GET");
+            if(conn.getResponseCode()==200){
+                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                in.close();
+                return response.toString();
+            } else {
+                String responseError = "error:" + conn.getResponseCode();
+                return responseError;
+            }
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        finally {
+            if(conn!=null) {
+                conn.disconnect();
+            }
+        }
+        return "error";
+    }
+    public static String getVerifyPic(String accessToken, String endpoint, String vTxId, String type) {
+        String resultEndpoint = endpoint + "/" + vTxId + "/verifiedData?type=" + type;
         StringBuffer response = new StringBuffer();
         HttpURLConnection conn = null;
         try {
@@ -1090,7 +1408,7 @@ public class PingOneVerify implements Node {
         return biographicMetaData;
     }
 
-    public static String createTransactionCallBody (String policyId, String telephoneNumber, String emailAddress, JSONObject fuzzyMatchingAttributes) {
+    public String createTransactionCallBody (String policyId, String telephoneNumber, String emailAddress, JSONObject fuzzyMatchingAttributes, NodeState ns) throws IdRepoException, SSOException {
         String body ="{\"verifyPolicy\": {\"id\":\"" + policyId + "\"}";
         if(telephoneNumber!="" && telephoneNumber!=null) {
             body = body + ",\"sendNotification\": {\"phone\": \"" + telephoneNumber + "\"}";
@@ -1099,8 +1417,18 @@ public class PingOneVerify implements Node {
             body = body + ",\"sendNotification\": {\"email\": \"" + emailAddress + "\"}";
         }
 
-        if(fuzzyMatchingAttributes !=null){
-            body = body + ",\"requirements\": {";
+        /* requirements go here */
+        body = body + ",\"requirements\": {";
+
+        if(Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION") && config.userSelfieAttribute()!=null) {
+            String selfie = getSelfie(ns);
+            if(!Objects.equals(selfie,"")) {
+                body = body + "\"referenceSelfie\": { \"value\": \"" + selfie +"\"}";
+            }
+        }
+
+        if(fuzzyMatchingAttributes !=null && !Objects.equals(getFlowType(config.flowType()), "AUTHENTICATION")){
+            /* fuzzy matching only happens on REGISTRATION and VERIFICATION */
             JSONArray keys = fuzzyMatchingAttributes.names();
             for (int i = 0; i < keys.length (); i++) {
                 String key = keys.getString (i);
@@ -1110,8 +1438,10 @@ public class PingOneVerify implements Node {
                 }
                 body = body + "\"" + key + "\":{ \"value\":\"" + value + "\"}";
             }
-            body = body + "}";
         }
+        body = body + "}";
+
+
 
         body = body + "}";
         return body;
