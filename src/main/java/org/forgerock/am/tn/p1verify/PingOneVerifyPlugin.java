@@ -1,17 +1,9 @@
 /*
- * The contents of this file are subject to the terms of the Common Development and
- * Distribution License (the License). You may not use this file except in compliance with the
- * License.
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services. 
+ * Ping Identity Corporation only offers such software or services to legal entities who have entered into 
+ * a binding license agreement with Ping Identity Corporation.
  *
- * You can obtain a copy of the License at legal/CDDLv1.0.txt. See the License for the
- * specific language governing permission and limitations under the License.
- *
- * When distributing Covered Software, include this CDDL Header Notice in each file and include
- * the License file at legal/CDDLv1.0.txt. If applicable, add the following below the CDDL
- * Header, with the fields enclosed by brackets [] replaced by your own identifying
- * information: "Portions copyright [year] [name of copyright owner]".
- *
- * Copyright 2017-2019 ForgeRock AS.
+ * Copyright 2024 Ping Identity Corporation. All Rights Reserved
  */
 
 package org.forgerock.am.tn.p1verify;
@@ -19,12 +11,9 @@ package org.forgerock.am.tn.p1verify;
 import java.util.Collections;
 import java.util.Map;
 
-import javax.inject.Inject;
-
 import org.forgerock.openam.auth.node.api.AbstractNodeAmPlugin;
 import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.plugins.PluginException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +49,7 @@ import org.slf4j.LoggerFactory;
  */
 public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "0.0.12";
+	static private String currentVersion = "0.0.13";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
 	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyPlugin.class);
 	private String loggerPrefix = "[PingOneVerifyPlugin]" + PingOneVerifyPlugin.logAppender;

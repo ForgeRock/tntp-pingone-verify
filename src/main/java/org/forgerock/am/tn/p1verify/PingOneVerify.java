@@ -1,18 +1,11 @@
 /*
- * The contents of this file are subject to the terms of the Common Development and
- * Distribution License (the License). You may not use this file except in compliance with the
- * License.
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services. 
+ * Ping Identity Corporation only offers such software or services to legal entities who have entered into 
+ * a binding license agreement with Ping Identity Corporation.
  *
- * You can obtain a copy of the License at legal/CDDLv1.0.txt. See the License for the
- * specific language governing permission and limitations under the License.
- *
- * When distributing Covered Software, include this CDDL Header Notice in each file and include
- * the License file at legal/CDDLv1.0.txt. If applicable, add the following below the CDDL
- * Header, with the fields enclosed by brackets [] replaced by your own identifying
- * information: "Portions copyright [year] [name of copyright owner]".
- *
- * Copyright 2017-2022 ForgeRock AS.
+ * Copyright 2024 Ping Identity Corporation. All Rights Reserved
  */
+
 package org.forgerock.am.tn.p1verify;
 
 import static org.forgerock.openam.auth.node.api.Action.send;
@@ -27,13 +20,19 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.ResourceBundle;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.inject.Inject;
@@ -41,17 +40,21 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 import javax.security.auth.callback.TextOutputCallback;
 
-import it.unimi.dsi.fastutil.objects.ObjectHeaps;
 import org.forgerock.json.JsonValue;
+import org.forgerock.oauth2.core.AccessToken;
 import org.forgerock.openam.annotations.sm.Attribute;
-import org.forgerock.openam.auth.node.api.*;
+import org.forgerock.openam.auth.node.api.Action;
+import org.forgerock.openam.auth.node.api.Node;
+import org.forgerock.openam.auth.node.api.NodeState;
+import org.forgerock.openam.auth.node.api.OutcomeProvider;
+import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
+import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValues;
+import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
 import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
-import org.forgerock.openam.sm.annotations.adapters.Password;
 import org.forgerock.util.i18n.PreferredLocales;
-import org.forgerock.openam.auth.node.api.OutcomeProvider;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -61,6 +64,7 @@ import com.google.inject.assistedinject.Assisted;
 import com.iplanet.sso.SSOException;
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
 import com.sun.identity.idm.IdRepoException;
+
 
 /**
  * A node that checks to see if zero-page login headers have specified username and whether that username is in a group
@@ -72,15 +76,10 @@ public class PingOneVerify implements Node {
 
     private final Logger logger = LoggerFactory.getLogger(PingOneVerify.class);
     private final Config config;
-    private final String loggerPrefix = "[Web3Auth Node]" + PingOneVerifyPlugin.logAppender;
+    private final String loggerPrefix = "[PingOneVerify Node]" + PingOneVerifyPlugin.logAppender;
     public static final String BUNDLE = PingOneVerify.class.getName();
-    public enum VerifyRegion { EU, US, APAC, CANADA }
-    public String getVerifyRegion(VerifyRegion verifyRegion) {
-        if (verifyRegion == VerifyRegion.EU) { return "eu";}
-        else if (verifyRegion == VerifyRegion.APAC) { return "asia";}
-        else if (verifyRegion == VerifyRegion.CANADA) { return "ca";}
-        else return "com";
-    }
+    private final Realm realm;
+    private TNTPPingOneConfig tntpPingOneConfig;
     public enum UserNotification { QR, SMS, EMAIL }
     public enum FlowType { REGISTRATION, VERIFICATION, AUTHENTICATION }
 	public enum GovId { DEFAULT, DRIVING_LICENSE, PASSPORT, ID_CARD }
@@ -103,7 +102,6 @@ public class PingOneVerify implements Node {
     }
     public String txId;
     public String verificationCode;
-    public String p1AccessToken;
     public String verificationUrl;
     public String verifiedClaims;
     public String verifyStatus;
@@ -144,38 +142,32 @@ public class PingOneVerify implements Node {
      * Configuration for the node.
      */
     public interface Config {
-        /**
-         * The header name for zero-page login that will contain the identity's username.
-         */
-        @Attribute(order = 100)
-        default String envId() {
-            return "";
-        }
-        @Attribute(order = 110)
-        default String clientId() {
-            return "";
-        }
-        @Attribute(order = 120)
-        @Password
-        char[] clientSecret();
+
+		/**
+		 * The Configured service
+		 */
+		@Attribute(order = 100, choiceValuesClass = TNTPPingOneConfigChoiceValues.class)
+		default String tntpPingOneConfigName() {
+			return TNTPPingOneConfigChoiceValues.createTNTPPingOneConfigName("Global Default");
+		};
+		
         @Attribute(order = 130)
-        default VerifyRegion verifyRegion() {
-            return VerifyRegion.EU;
+        default FlowType flowType() {
+            return FlowType.REGISTRATION;
         }
+    	
         @Attribute(order = 140)
         default String userIdAttribute() {
             return "";
         }
+        
         @Attribute(order = 145)
-        default String userSelfieAttribute() {
+        default String pictureAttribute() {
             return "";
         }
-        @Attribute(order = 146)
-        default String docFrontAttribute() {
-            return "";
-        }
-        @Attribute(order = 147)
-        default String docPicAttribute() { return ""; }
+        
+        
+        
         @Attribute(order = 150)
         default String verifyPolicyId() {
             return "";
@@ -186,10 +178,7 @@ public class PingOneVerify implements Node {
         }
         @Attribute(order = 170)
         default boolean userNotificationChoice() { return false; }
-        @Attribute(order = 180)
-        default FlowType flowType() {
-            return FlowType.REGISTRATION;
-        }
+
         @Attribute(order = 190)
         default int dobVerification() {return 0;}
         @Attribute(order = 200)
@@ -261,6 +250,8 @@ public class PingOneVerify implements Node {
     public PingOneVerify(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper) {
         this.coreWrapper = coreWrapper;
         this.config = config;
+        this.realm = realm;
+		this.tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(config.tntpPingOneConfigName());        
     }
 
     @Override
@@ -268,61 +259,6 @@ public class PingOneVerify implements Node {
         NodeState ns = context.getStateFor(this);
         try {
             logger.debug(loggerPrefix + "Started");
-
-            int aaa=1;
-            if(aaa==0) {
-                String aT="eyJhbGciOiJSUzI1NiIsImtpZCI6ImRlZmF1bHQifQ.eyJjbGllbnRfaWQiOiJlNmY3NWE1Zi1hNzVkLTRmZTktODQ2Mi03ODNlNDQ5MmEyNjUiLCJpc3MiOiJodHRwczovL2F1dGgucGluZ29uZS5ldS81YzYwM2E1Ni1jOTQxLTQyYTEtOWZjZC0yZjYzMjEzZTk5OWUvYXMiLCJpYXQiOjE3MDc3NDg1MjEsImV4cCI6MTcwNzc1MjEyMSwiYXVkIjpbImh0dHBzOi8vYXBpLnBpbmdvbmUuZXUiXSwiZW52IjoiNWM2MDNhNTYtYzk0MS00MmExLTlmY2QtMmY2MzIxM2U5OTllIiwib3JnIjoiODg1NjgwY2YtYTM3Yi00ZjdjLTk2ZGQtZjQ2ZmMyMjU0Nzg2In0.DQe2JURXdzpmkOJvH58rz5G2jDqCtxxYYapQU72msd_MEpHtzRSQEuhhrIAn7r2oPREBVtrhvABqLSceqOrgDPhZvFJE2smfyjXS3JH3k6e5dENd4Ca-5oeQ9dF8ZXeuOO-nWRlvlWZlbemRXkjNgGipvgpJ6UvQ-fa4gNnnipnJUfFu1zxl2_iZ6JUrXLgwa_iGe9adBY9QkdfRA3rRS7ZhnzBfIqJT2srX156ZMRf3FtacVheOQ4ZDz-OC5Mfq5aunQNLPanxp7w1Bw3bDRSn488wrQkHIfsr06LjQV-O5Ff9gXX285yY9wy1l-JFoWvyd9cqgdO0Xx4DUVVXGlg";
-                String response = "{\n" +
-                        "    \"_links\": {\n" +
-                        "        \"environment\": {\n" +
-                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e\"\n" +
-                        "        },\n" +
-                        "        \"verifyTransaction\": {\n" +
-                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/435d2704-e4f1-47e7-abd4-0d37068be44c/verifyTransactions/42503b3b-5498-4247-b260-e4a98742bf9f\"\n" +
-                        "        },\n" +
-                        "        \"self\": {\n" +
-                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/435d2704-e4f1-47e7-abd4-0d37068be44c/verifyTransactions/42503b3b-5498-4247-b260-e4a98742bf9f/verifiedData\"\n" +
-                        "        },\n" +
-                        "        \"user\": {\n" +
-                        "            \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/435d2704-e4f1-47e7-abd4-0d37068be44c\"\n" +
-                        "        }\n" +
-                        "    },\n" +
-                        "    \"_embedded\": {\n" +
-                        "        \"verifiedData\": [\n" +
-                        "            {\n" +
-                        "                \"_links\": {\n" +
-                        "                    \"self\": {\n" +
-                        "                        \"href\": \"https://api.pingone.eu/v1/environments/5c603a56-c941-42a1-9fcd-2f63213e999e/users/435d2704-e4f1-47e7-abd4-0d37068be44c/verifyTransactions/42503b3b-5498-4247-b260-e4a98742bf9f/verifiedData/971ffa79-3cf8-3e41-82aa-ca38ed84da14\"\n" +
-                        "                    }\n" +
-                        "                },\n" +
-                        "                \"id\": \"971ffa79-3cf8-3e41-82aa-ca38ed84da14\",\n" +
-                        "                \"type\": \"SELFIE\",\n" +
-                        "                \"data\": {\n" +
-                        "                    \"FORMAT\": \"JPEG\",\n" +
-                        "                    \"IMAGE\": \"thisismyimage\"\n" +
-                        "                },\n" +
-                        "                \"createdAt\": \"2024-02-12T14:01:06.514Z\"\n" +
-                        "            }\n" +
-                        "        ]\n" +
-                        "    },\n" +
-                        "    \"size\": 1\n" +
-                        "}";
-                String envId="5c603a56-c941-42a1-9fcd-2f63213e999e";
-                String userId ="435d2704-e4f1-47e7-abd4-0d37068be44c";
-                String txId="be1199ef-4803-438a-a372-48a5123fd764";
-
-                String selfie = "";
-                //selfie = verifyApiSelfieToJpeg(getVerifySelfie(aT,getVerifyEndpointUrl(envId),txId));
-                selfie = getVerifyPic(aT,getVerifyEndpointUrl(userId),txId, "SELFIE");
-                ns.putShared("debug-selfie",selfie);
-                selfie = verifyApiBase64ToJpeg(selfie);
-                ns.putShared("debug-selfie2",selfie);
-
-
-                return Action.goTo(ERROR).build();
-            }
-
-
 
             /* check if we have PingOne Verify User ID attribute in config */
             if(config.userIdAttribute() == null) {
@@ -362,18 +298,10 @@ public class PingOneVerify implements Node {
                 /* starting the verification procedure */
                 String telephoneNumber = null;
                 String emailAddress = null;
-                String clientSecret = new String(config.clientSecret());
-                /* get Access Token from PingOne */
-                p1AccessToken = getAccessToken(getTokenEndpointUrl(), config.clientId(), clientSecret);
-                if (p1AccessToken.indexOf("error")==0) {
-                    logger.debug(loggerPrefix + "Failed to obtain PingOne service access token");
-                    ns.putShared("PingOneVerifyTokenError", "Failed to obtain access token for PingOne Verify");
-                    ns.putShared("PingOneVerifyTokenErrorDebugResponseCode", p1AccessToken);
-                    return Action.goTo(ERROR).build();
-                } else {
-                    ns.putShared("PingOneAccessToken",p1AccessToken);
-                }
-
+                
+                TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+                
                 /* Check what flow type we're using and set/get a UUID for a user in PingOne */
                 String p1vUserName = "";
                 String p1vUserId = "";
@@ -381,7 +309,7 @@ public class PingOneVerify implements Node {
                     UUID uuid = UUID.randomUUID();
                     /* creating a random UUID for a new user */
                     p1vUserName = uuid.toString();
-                    p1vUserId = createPingOneUser(p1AccessToken,getUserEndpointUrl(),p1vUserName);
+                    p1vUserId = createPingOneUser(accessToken,getUserEndpointUrl(),p1vUserName);
                     putP1vUseridToObjectAttributes(ns,config.userIdAttribute(),p1vUserId);
                 } else {
                     /* get the id from sharedState */
@@ -450,7 +378,7 @@ public class PingOneVerify implements Node {
                 }
                 /* create PingOne Verify transaction */
                 String verifyTxBody = createTransactionCallBody(config.verifyPolicyId(), telephoneNumber, emailAddress, createFuzzyMatchingAttributeMapObject(), ns);
-                String verifyTxResponse = createVerifyTransaction(p1AccessToken, getVerifyEndpointUrl(p1vUserId), verifyTxBody);
+                String verifyTxResponse = createVerifyTransaction(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxBody);
                 if (verifyTxResponse.indexOf("error")==0) {
                     ns.putShared("PingOneTransactionError", verifyTxResponse);
                     if(Objects.equals(getFlowType(config.flowType()), "VERIFICATION")) {
@@ -474,7 +402,9 @@ public class PingOneVerify implements Node {
             }
             if (ns.get("verifyStage").asInteger() == 3) {
                 /* sms and email */
-                String accessToken = ns.get("PingOneAccessToken").asString();
+            	
+            	TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
                 String verifyTxId = ns.get("PingOneVerifyTxId").asString();
                 String p1vUserId = ns.get("p1vUserId").asString();
 
@@ -486,7 +416,7 @@ public class PingOneVerify implements Node {
                 int verifyResult = 2;
                 if(count>3) {
                     /* wait for 15 seconds before we start checking for result */
-                    String sResult = getVerifyResult(accessToken, getVerifyEndpointUrl(p1vUserId),verifyTxId);
+                    String sResult = getVerifyResult(accessToken.getTokenId(), getVerifyEndpointUrl(p1vUserId),verifyTxId);
                     if (sResult.indexOf("error")!=0) {
                         verifyResult = checkVerifyResult(sResult);
                     }
@@ -505,13 +435,13 @@ public class PingOneVerify implements Node {
                     ns.putShared("counter",0);
                     if((config.saveMetadata() || createFuzzyMatchingAttributeMapObject()!=null) && !config.demoMode() ) {
                         /* we need metadata for either processing or to save in sharedState, demoMode is off */
-                        verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                        verifyMetadata = getVerifyTransactionMetadata(accessToken.getTokenId(), getVerifyEndpointUrl(p1vUserId), verifyTxId);
                         if(config.saveMetadata()) {
-                            ns.putShared("PingOneVerifyMetadata",verifyMetadata);
+                        	ns.putTransient("PingOneVerifyMetadata",verifyMetadata);
                         }
                     }
                     /* Leaving token and transaction id behind in transientState if needed */
-                    transientStateResidue(ns, accessToken, verifyTxId);
+                    transientStateResidue(ns, accessToken.getTokenId(), verifyTxId);
 
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
@@ -519,7 +449,7 @@ public class PingOneVerify implements Node {
                         if(!config.demoMode()) {
                             if(!Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION")) {
                                 /* not fetching claims for AUTHENTICATION flow */
-                                verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                                verifiedClaims = getVerifiedData(accessToken.getTokenId(), getVerifyEndpointUrl(p1vUserId), verifyTxId);
                             }
                         } else {
                             /*we are in demo mode, returning example dataset*/
@@ -532,30 +462,9 @@ public class PingOneVerify implements Node {
                             return Action.goTo(FAIL).build();
                         }
                         if(config.saveMetadata() || createFuzzyMatchingAttributeMapObject()!=null) {
-                            verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                            verifyMetadata = getVerifyTransactionMetadata(accessToken.getTokenId(), getVerifyEndpointUrl(p1vUserId), verifyTxId);
                             if(config.saveMetadata()) {
-                                ns.putShared("PingOneVerifyMetadata",verifyMetadata);
-                            }
-                        }
-                        if(config.userSelfieAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
-                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
-                            selfie = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"SELFIE"));
-                            if(Objects.equals(selfie,"error")) {
-                                selfie = "";
-                            }
-                        }
-                        if(config.docFrontAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
-                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
-                            docFront = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"CROPPED_DOCUMENT"));
-                            if(Objects.equals(docFront,"error")) {
-                                docFront = "";
-                            }
-                        }
-                        if(config.docPicAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
-                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
-                            docPic = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"CROPPED_PORTRAIT"));
-                            if(Objects.equals(docPic,"error")) {
-                                docPic = "";
+                            	ns.putTransient("PingOneVerifyMetadata",verifyMetadata);
                             }
                         }
                         if(onResultSuccess(ns)){
@@ -634,7 +543,8 @@ public class PingOneVerify implements Node {
             }
             if (ns.get("verifyStage").asInteger() == 4) {
                 /*qr code*/
-                String accessToken = ns.get("PingOneAccessToken").asString();
+            	TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
                 String verifyTxId = ns.get("PingOneVerifyTxId").asString();
                 String p1vUserId = ns.get("p1vUserId").asString();
 
@@ -647,7 +557,7 @@ public class PingOneVerify implements Node {
 
                 if(count>3) {
                     /*wait for 15 seconds before we start checking for result*/
-                    String sResult = getVerifyResult(accessToken, getVerifyEndpointUrl(p1vUserId),verifyTxId );
+                    String sResult = getVerifyResult(accessToken.getTokenId(), getVerifyEndpointUrl(p1vUserId),verifyTxId );
                     if (sResult.indexOf("error")!=0) {
                         verifyResult = checkVerifyResult(sResult);
                     }
@@ -668,13 +578,13 @@ public class PingOneVerify implements Node {
                     ns.putShared("counter",0);
                     if((config.saveMetadata() || createFuzzyMatchingAttributeMapObject()!=null) && !config.demoMode() ) {
                         /* we need metadata for either processing or to save in sharedState, demoMode is off */
-                        verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                        verifyMetadata = getVerifyTransactionMetadata(accessToken.getTokenId(), getVerifyEndpointUrl(p1vUserId), verifyTxId);
                         if(config.saveMetadata()) {
-                            ns.putShared("PingOneVerifyMetadata",verifyMetadata);
+                        	ns.putTransient("PingOneVerifyMetadata",verifyMetadata);
                         }
                     }
                     /* Leaving token and transaction id behind in transientState if needed */
-                    transientStateResidue(ns, accessToken, verifyTxId);
+                    transientStateResidue(ns, accessToken.getTokenId(), verifyTxId);
 
                     if(verifyResult==1) {
                         /* PingOne Verify returned SUCCESS */
@@ -682,7 +592,7 @@ public class PingOneVerify implements Node {
                         if(!config.demoMode()) {
                             if(!Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION")) {
                                 /* not fetching claims for AUTHENTICATION flow */
-                                verifiedClaims = getVerifiedData(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                                verifiedClaims = getVerifiedData(accessToken.getTokenId(), getVerifyEndpointUrl(p1vUserId), verifyTxId);
                             }
                         } else {
                             /*we are in demo mode, returning example dataset*/
@@ -695,32 +605,12 @@ public class PingOneVerify implements Node {
                             return Action.goTo(FAIL).build();
                         }
                         if(config.saveMetadata() || createFuzzyMatchingAttributeMapObject()!=null) {
-                            verifyMetadata = getVerifyTransactionMetadata(accessToken, getVerifyEndpointUrl(p1vUserId), verifyTxId);
+                            verifyMetadata = getVerifyTransactionMetadata(accessToken.getTokenId(), getVerifyEndpointUrl(p1vUserId), verifyTxId);
                             if(config.saveMetadata()) {
-                                ns.putShared("PingOneVerifyMetadata",verifyMetadata);
+                            	ns.putTransient("PingOneVerifyMetadata",verifyMetadata);
                             }
                         }
-                        if(config.userSelfieAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
-                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
-                            selfie = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"SELFIE"));
-                            if(Objects.equals(selfie,"error")) {
-                                selfie = "";
-                            }
-                        }
-                        if(config.docFrontAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
-                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
-                            docFront = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"CROPPED_DOCUMENT"));
-                            if(Objects.equals(docFront,"error")) {
-                                docFront = "";
-                            }
-                        }
-                        if(config.docPicAttribute()!=null && Objects.equals(getFlowType(config.flowType()),"REGISTRATION")) {
-                            /* Fetching selfie in REGISTRATION FLOW if the attribute name to store selfie is provided */
-                            docPic = verifyApiBase64ToJpeg(getVerifyPic(accessToken,getVerifyEndpointUrl(p1vUserId),verifyTxId,"CROPPED_PORTRAIT"));
-                            if(Objects.equals(docPic,"error")) {
-                                docPic = "";
-                            }
-                        }
+
 
                         if(onResultSuccess(ns)) {
                             if(!Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION")) {
@@ -808,7 +698,9 @@ public class PingOneVerify implements Node {
             return Action.goTo(ERROR).build();
         }
     }
-    public boolean onResultSuccess(NodeState ns) throws IdRepoException, SSOException {
+    
+    
+	private boolean onResultSuccess(NodeState ns) throws IdRepoException, SSOException {
         if(config.saveVerifiedClaims()) {
             /* save verified claims to SharedState (config) */
             ns.putShared("PingOneVerifyClaims",verifiedClaims);
@@ -834,7 +726,7 @@ public class PingOneVerify implements Node {
             return true;
         }
     }
-    public void transientStateResidue(NodeState ns, String p1AccessToken, String txId) {
+    private void transientStateResidue(NodeState ns, String p1AccessToken, String txId) {
         if(p1AccessToken!=null && !Objects.equals(p1AccessToken,"") && config.tsAccessToken()) {
             ns.putTransient("p1AccessToken",p1AccessToken);
         }
@@ -842,18 +734,18 @@ public class PingOneVerify implements Node {
             ns.putTransient("p1VtxId",txId);
         }
     }
-    public String dsAttributeToVerifiedClaim (String dsAttribute) {
+    private String dsAttributeToVerifiedClaim (String dsAttribute) {
         JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
         return attributeMap.get(dsAttribute).toString();
     }
-    public String verifiedClaimAttributeToRequirementsAttribute (String vcAttribute) {
+    private String verifiedClaimAttributeToRequirementsAttribute (String vcAttribute) {
         JSONObject attributeMap = new JSONObject(ping2pingAttributeMap);
         return attributeMap.get(vcAttribute).toString();
     }
-    public String dsAttributeToRequirementsAttribute (String dsAttribute) {
+    private String dsAttributeToRequirementsAttribute (String dsAttribute) {
         return verifiedClaimAttributeToRequirementsAttribute(dsAttributeToVerifiedClaim(dsAttribute));
     }
-    public JSONObject createFuzzyMatchingAttributeMapObject () {
+    private JSONObject createFuzzyMatchingAttributeMapObject () {
         JSONObject attributeMapping = new JSONObject();
         if(config.fuzzyMatchingConfiguration().isEmpty()) {
             attributeMapping = null;
@@ -879,7 +771,7 @@ public class PingOneVerify implements Node {
         }
         return attributeMapping;
     }
-    public boolean getUserAttributesFromOA (NodeState ns) {
+    private boolean getUserAttributesFromOA (NodeState ns) {
         JsonValue objectAttributes =  ns.get("objectAttributes");
         List<String> requiredAttributes = config.attributesToMatch();
         for (int i = 0; i < requiredAttributes.size(); i++) {
@@ -893,21 +785,21 @@ public class PingOneVerify implements Node {
         ns.putShared("userAttributesDsJson",userAttributesDsJson.toString());
         return true;
     }
-    public String getSelfie (NodeState ns) throws IdRepoException, SSOException {
-        if(ns.isDefined(config.userSelfieAttribute())) {
-            return ns.get(config.userSelfieAttribute()).toString();
+    private String getSelfie (NodeState ns) throws IdRepoException, SSOException {
+        if(ns.isDefined(config.pictureAttribute())) {
+            return ns.get(config.pictureAttribute()).toString();
         }
         /* no identifier in sharedState, fetch from DS */
         String userName = ns.get(USERNAME).asString();
         String realm = ns.get(REALM).asString();
         /* get user attribute from ds */
         String userIdentifier = "";
-        userIdentifier = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm).getAttribute(config.userSelfieAttribute()).toString();
+        userIdentifier = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm).getAttribute(config.pictureAttribute()).toString();
 
         userIdentifier = userIdentifier.replaceAll("[\\[\\]\\\"]", "");
         return userIdentifier;
     }
-    public String getP1uidFromDS (NodeState ns) throws IdRepoException, SSOException {
+    private String getP1uidFromDS (NodeState ns) throws IdRepoException, SSOException {
         if(ns.isDefined(config.userIdAttribute())) {
             return ns.get(config.userIdAttribute()).toString();
         }
@@ -923,7 +815,7 @@ public class PingOneVerify implements Node {
 
         //return coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm).getAttribute(config.userIdAttribute()).toString();
     }
-    public long calculateAge(NodeState ns, String dobClaim) {
+    private long calculateAge(NodeState ns, String dobClaim) {
         String toParse = dobClaim + " 00:00:01.000-00:00";
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
         OffsetDateTime dateTime = OffsetDateTime.parse(toParse, formatter);
@@ -931,7 +823,7 @@ public class PingOneVerify implements Node {
         ns.putShared("Age",ChronoUnit.DAYS.between(dateTime.toInstant(), now)/365);
         return ChronoUnit.DAYS.between(dateTime.toInstant(), now)/365;
     }
-    public boolean validateDocumentExpiration(String expirationDateClaim) {
+    private boolean validateDocumentExpiration(String expirationDateClaim) {
         String toParse = expirationDateClaim + " 00:00:01.000-00:00";
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
         OffsetDateTime dateTime = OffsetDateTime.parse(toParse, formatter);
@@ -945,7 +837,7 @@ public class PingOneVerify implements Node {
 
     }
 
-    public void getUserAttributesFromDS (NodeState ns) throws IdRepoException, SSOException {
+    private void getUserAttributesFromDS (NodeState ns) throws IdRepoException, SSOException {
         List<String> requiredAttributes = config.attributesToMatch();
         String userName = ns.get(USERNAME).asString();
         String realm = ns.get(REALM).asString();
@@ -966,7 +858,7 @@ public class PingOneVerify implements Node {
         }
         ns.putShared("userAttributesDsJson",userAttributesDsJson.toString());
     }
-    public int levelToNumber(String level) {
+    private int levelToNumber(String level) {
         if(Objects.equals(level,"LOW")) {
             return 0;
         } else if (Objects.equals(level,"MEDIUM")) {
@@ -975,7 +867,7 @@ public class PingOneVerify implements Node {
             return 2;
         }
     }
-    public boolean validateVerifiedClaims(NodeState ns, String claims) throws IdRepoException, SSOException {
+    private boolean validateVerifiedClaims(NodeState ns, String claims) throws IdRepoException, SSOException {
         /* verification procedure here */
 
         if(config.demoMode()) {
@@ -985,9 +877,6 @@ public class PingOneVerify implements Node {
 
         List<String> requiredAttributes = config.attributesToMatch();
         userAttributesDsJson = new JSONObject(ns.get("userAttributesDsJson").asString());
-
-        String accessToken = ns.get("PingOneAccessToken").asString();
-        String verifyTxId = ns.get("PingOneVerifyTxId").asString();
 
         if(!config.fuzzyMatchingConfiguration().isEmpty()) {
             /* get biographic data from metaData */
@@ -1046,7 +935,7 @@ public class PingOneVerify implements Node {
         }
         return requiredAttributes.size() == matchedAttributes;
     }
-    public boolean verifiedClaimsToSharedState(NodeState ns, String verifiedClaims) {
+    private boolean verifiedClaimsToSharedState(NodeState ns, String verifiedClaims) {
         /* Mapping verified claims (based on the map in config to objectAttributes */
         JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
         JSONArray keys = attributeMap.names();
@@ -1069,21 +958,13 @@ public class PingOneVerify implements Node {
                 }
             }
         }
-        if(!Objects.equals(selfie,"")) {
-            ns.putTransient(config.userSelfieAttribute(),selfie);
-        }
-        if(!Objects.equals(docFront,"")) {
-            ns.putTransient(config.docFrontAttribute(),docFront);
-        }
-        if(!Objects.equals(docPic,"")) {
-            ns.putTransient(config.docPicAttribute(),docPic);
-        }
+
 
         ns.putShared("objectAttributes",objectAttributes);
         return true;
     }
 
-    public boolean putP1vUseridToObjectAttributes(NodeState ns, String p1vUserIdAttribute, String p1vUserId) {
+    private boolean putP1vUseridToObjectAttributes(NodeState ns, String p1vUserIdAttribute, String p1vUserId) {
         /* Mapping verified claims (based on the map in config to objectAttributes */
         JsonValue objectAttributes;
         objectAttributes = ns.get("objectAttributes");
@@ -1092,7 +973,7 @@ public class PingOneVerify implements Node {
         return true;
     }
 
-    public static String createQrCodeScript(String url) {
+    private String createQrCodeScript(String url) {
         return  "var div = document.createElement('div'); \n" +
                 "div.id = 'QRCode';  \n" +
                 "div.innerHTML = '<div class=\"container\">' \n" +
@@ -1107,19 +988,15 @@ public class PingOneVerify implements Node {
                 "document.getElementsByClassName(\"btn mt-2 btn-link\")[0].hidden = true;\n";
     }
 
-    public String getTokenEndpointUrl() {
-        return  "https://auth.pingone." + getVerifyRegion(config.verifyRegion()) + "/" + config.envId() + "/as/token/";
+    private String getUserEndpointUrl() {
+        return  "https://api.pingone." + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users";
     }
 
-    public String getUserEndpointUrl() {
-        return  "https://api.pingone." + getVerifyRegion(config.verifyRegion()) + "/v1/environments/" + config.envId() + "/users";
+    private String getVerifyEndpointUrl(String p1vUid) {
+        return  "https://api.pingone." + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + p1vUid + "/verifyTransactions";
     }
 
-    public String getVerifyEndpointUrl(String p1vUid) {
-        return  "https://api.pingone." + getVerifyRegion(config.verifyRegion()) + "/v1/environments/" + config.envId() + "/users/" + p1vUid + "/verifyTransactions";
-    }
-
-    public static String createVerifyTransaction(String accessToken, String endpoint, String body) {
+    private String createVerifyTransaction(AccessToken accessToken, String endpoint, String body) {
         StringBuffer response = new StringBuffer();
         HttpURLConnection conn = null;
         try {
@@ -1159,7 +1036,7 @@ public class PingOneVerify implements Node {
         return "error";
     }
 
-    public static String createPingOneUser(String accessToken, String endpoint, String userName) {
+    private String createPingOneUser(AccessToken accessToken, String endpoint, String userName) {
         StringBuffer response = new StringBuffer();
         HttpURLConnection conn = null;
         String body = "{\"username\":\"" + userName + "\"}";
@@ -1200,7 +1077,7 @@ public class PingOneVerify implements Node {
         }
         return "error";
     }
-    public int checkVerifyResult(String verifyResponse) {
+    private int checkVerifyResult(String verifyResponse) {
         try {
             JSONObject obj = new JSONObject(verifyResponse);
             String result = "";
@@ -1237,13 +1114,11 @@ public class PingOneVerify implements Node {
         }
     }
 
-
-
-    public static String getVerifiedData(String accessToken, String endpoint, String vTxId) {
+    private String getVerifiedData(String accessToken, String endpoint, String vTxId) {
         String resultEndpoint = endpoint + "/" + vTxId + "/verifiedData?type=GOVERNMENT_ID";
         StringBuffer response = new StringBuffer();
         HttpURLConnection conn = null;
-        try {
+		try {
             URL url = new URL(resultEndpoint);
             conn = (HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(4000);
@@ -1269,18 +1144,25 @@ public class PingOneVerify implements Node {
                 return responseError;
             }
         } catch (MalformedURLException e) {
-            e.printStackTrace();
+        	String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(e);
+        	logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
         } catch (IOException e) {
-            e.printStackTrace();
+        	String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(e);
+        	logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
         }
         finally {
             if(conn!=null) {
+            	try {
                 conn.disconnect();
+            	}
+            	catch (Exception e) {
+            		//DO NOTHING
+            	}
             }
         }
         return "error";
     }
-    public static String getVerifyResult(String accessToken, String endpoint, String vTxId) {
+    private String getVerifyResult(String accessToken, String endpoint, String vTxId) {
         String resultEndpoint = endpoint + "/" + vTxId;
         StringBuffer response = new StringBuffer();
         HttpURLConnection conn = null;
@@ -1306,9 +1188,11 @@ public class PingOneVerify implements Node {
                 return responseError;
             }
         } catch (MalformedURLException e) {
-            e.printStackTrace();
+        	String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(e);
+        	logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
         } catch (IOException e) {
-            e.printStackTrace();
+        	String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(e);
+        	logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
         }
         finally {
             if(conn!=null) {
@@ -1317,44 +1201,8 @@ public class PingOneVerify implements Node {
         }
         return "error";
     }
-    public static String getVerifyPic(String accessToken, String endpoint, String vTxId, String type) {
-        String resultEndpoint = endpoint + "/" + vTxId + "/verifiedData?type=" + type;
-        StringBuffer response = new StringBuffer();
-        HttpURLConnection conn = null;
-        try {
-            URL url = new URL(resultEndpoint);
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(4000);
-            conn.setDoOutput(true);
-            conn.setDoInput(true);
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-            conn.setRequestMethod("GET");
-            if(conn.getResponseCode()==200){
-                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                String inputLine;
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
-                }
-                in.close();
-                return response.toString();
-            } else {
-                String responseError = "error:" + conn.getResponseCode();
-                return responseError;
-            }
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        finally {
-            if(conn!=null) {
-                conn.disconnect();
-            }
-        }
-        return "error";
-    }
-    public static String getVerifyTransactionMetadata(String accessToken, String endpoint, String vTxId) {
+
+    private String getVerifyTransactionMetadata(String accessToken, String endpoint, String vTxId) {
         String resultEndpoint = endpoint + "/" + vTxId + "/metaData";
         StringBuffer response = new StringBuffer();
         HttpURLConnection conn = null;
@@ -1382,9 +1230,11 @@ public class PingOneVerify implements Node {
                 return responseError;
             }
         } catch (MalformedURLException e) {
-            e.printStackTrace();
+        	String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(e);
+        	logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
         } catch (IOException e) {
-            e.printStackTrace();
+        	String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(e);
+        	logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
         }
         finally {
             if(conn!=null) {
@@ -1393,7 +1243,7 @@ public class PingOneVerify implements Node {
         }
         return "error";
     }
-    public static String getVerifyBiographicMetadata(String metadata) {
+    private String getVerifyBiographicMetadata(String metadata) {
         String biographicMetaData = "";
         JSONArray metaDataArray = new JSONArray(metadata);
         for(int i=0; i<metaDataArray.length(); i++) {
@@ -1408,7 +1258,7 @@ public class PingOneVerify implements Node {
         return biographicMetaData;
     }
 
-    public String createTransactionCallBody (String policyId, String telephoneNumber, String emailAddress, JSONObject fuzzyMatchingAttributes, NodeState ns) throws IdRepoException, SSOException {
+    private String createTransactionCallBody (String policyId, String telephoneNumber, String emailAddress, JSONObject fuzzyMatchingAttributes, NodeState ns) throws IdRepoException, SSOException {
         String body ="{\"verifyPolicy\": {\"id\":\"" + policyId + "\"}";
         if(telephoneNumber!="" && telephoneNumber!=null) {
             body = body + ",\"sendNotification\": {\"phone\": \"" + telephoneNumber + "\"}";
@@ -1420,7 +1270,7 @@ public class PingOneVerify implements Node {
         /* requirements go here */
         body = body + ",\"requirements\": {";
 
-        if(Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION") && config.userSelfieAttribute()!=null) {
+        if(Objects.equals(getFlowType(config.flowType()),"AUTHENTICATION") && config.pictureAttribute()!=null) {
             String selfie = getSelfie(ns);
             if(!Objects.equals(selfie,"")) {
                 body = body + "\"referenceSelfie\": { \"value\": \"" + selfie +"\"}";
@@ -1446,49 +1296,7 @@ public class PingOneVerify implements Node {
         body = body + "}";
         return body;
     }
-    public static String getAccessToken(String endpoint, String client_id, String client_secret) {
-        HttpURLConnection conn = null;
-        try {
-            URL url = new URL(endpoint);
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(4000);
-            conn.setDoOutput(true);
-            conn.setDoInput(true);
-            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            conn.setRequestMethod("POST");
-            String body = "grant_type=client_credentials&client_id=" + client_id +
-                    "&client_secret=" + client_secret + "&scope=default";
-            OutputStream os = conn.getOutputStream();
-            os.write(body.getBytes(StandardCharsets.UTF_8));
-            os.close();
 
-            if(conn.getResponseCode()==200) {
-                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                String inputLine;
-                StringBuffer response = new StringBuffer();
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
-                }
-                in.close();
-                JSONObject obj = new JSONObject(response.toString());
-                String accessToken = obj.getString("access_token");
-                return accessToken;
-            } else {
-                String responseError = "error:" + conn.getResponseCode();
-                return responseError;
-            }
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        finally {
-            if(conn!=null) {
-                conn.disconnect();
-            }
-        }
-        return "error";
-    }
     public static class PingOneVerifyOutcomeProvider implements OutcomeProvider {
         @Override
         public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
