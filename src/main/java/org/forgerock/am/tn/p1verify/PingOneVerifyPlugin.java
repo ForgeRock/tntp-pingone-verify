@@ -8,7 +8,8 @@
 
 package org.forgerock.am.tn.p1verify;
 
-import java.util.Collections;
+import static java.util.Arrays.asList;
+
 import java.util.Map;
 
 import org.forgerock.openam.auth.node.api.AbstractNodeAmPlugin;
@@ -16,6 +17,8 @@ import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.plugins.PluginException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableMap;
 
 /**
  * Definition of an <a href="https://backstage.forgerock.com/docs/am/6/apidocs/org/forgerock/openam/auth/node/api/AbstractNodeAmPlugin.html">AbstractNodeAmPlugin</a>. 
@@ -49,7 +52,7 @@ import org.slf4j.LoggerFactory;
  */
 public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "0.0.13";
+	static private String currentVersion = "0.0.17";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
 	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyPlugin.class);
 	private String loggerPrefix = "[PingOneVerifyPlugin]" + PingOneVerifyPlugin.logAppender;
@@ -62,8 +65,13 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
      */
 	@Override
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
-		return Collections.singletonMap(PingOneVerifyPlugin.currentVersion, 
-				Collections.singletonList(PingOneVerify.class));
+		return new ImmutableMap.Builder<String, Iterable<? extends Class<? extends Node>>>()
+                .put(currentVersion, asList(
+                						PingOneVerify.class, 
+                						Registration.class, 
+                						Authentication.class,
+                						Verification.class))
+                .build();
 	}
 
     /** 
@@ -104,6 +112,9 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 		logger.error(loggerPrefix + "currentVersion = " + currentVersion);
 		try {
 			pluginTools.upgradeAuthNode(PingOneVerify.class);
+			pluginTools.upgradeAuthNode(Registration.class);
+			pluginTools.upgradeAuthNode(Authentication.class);
+			pluginTools.upgradeAuthNode(Verification.class);
 		} catch (Exception e) {
 			throw new PluginException(e.getMessage());
 		}

@@ -76,7 +76,7 @@ public class PingOneVerify implements Node {
 
     private final Logger logger = LoggerFactory.getLogger(PingOneVerify.class);
     private final Config config;
-    private final String loggerPrefix = "[PingOneVerify Node]" + PingOneVerifyPlugin.logAppender;
+    private final String loggerPrefix = "[PingOne Verify Node]" + PingOneVerifyPlugin.logAppender;
     public static final String BUNDLE = PingOneVerify.class.getName();
     private final Realm realm;
     private TNTPPingOneConfig tntpPingOneConfig;
@@ -155,29 +155,33 @@ public class PingOneVerify implements Node {
         default FlowType flowType() {
             return FlowType.REGISTRATION;
         }
-    	
+        
+        @Attribute(order = 135)
+        default String verifyPolicyId() {
+            return "";
+        }
+        
         @Attribute(order = 140)
+        default UserNotification userNotification() {
+            return UserNotification.QR;
+        }
+        @Attribute(order = 150)
+        default boolean userNotificationChoice() { return false; }
+    	
+        @Attribute(order = 160)
         default String userIdAttribute() {
             return "";
         }
         
-        @Attribute(order = 145)
+        @Attribute(order = 170)
         default String pictureAttribute() {
             return "";
         }
         
         
         
-        @Attribute(order = 150)
-        default String verifyPolicyId() {
-            return "";
-        }
-        @Attribute(order = 160)
-        default UserNotification userNotification() {
-            return UserNotification.QR;
-        }
-        @Attribute(order = 170)
-        default boolean userNotificationChoice() { return false; }
+
+
 
         @Attribute(order = 190)
         default int dobVerification() {return 0;}
