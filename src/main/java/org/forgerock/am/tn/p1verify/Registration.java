@@ -215,11 +215,6 @@ public class Registration implements Node {
 			results.add(new Outcome(Constants.SUCCESS, bundle.getString("successOutcome")));
 			results.add(new Outcome(Constants.FAIL, bundle.getString("failOutcome")));
 
-			/* Add AGE FAIL outcome to REGISTRATION flow (only) if using age verification */
-			if (!Objects.equals(nodeAttributes.get("dobVerification").toString(), "0")
-					&& Objects.equals(nodeAttributes.get("flowType").toString(), "\"REGISTRATION\"")) {
-				results.add(new Outcome(Constants.AGEFAILED, bundle.getString("ageFail")));
-			}
 
 			results.add(new Outcome(Constants.ERROR, bundle.getString("errorOutcome")));
 			return Collections.unmodifiableList(results);

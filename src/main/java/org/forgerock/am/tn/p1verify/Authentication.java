@@ -8,15 +8,23 @@
 
 package org.forgerock.am.tn.p1verify;
 
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
+
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.UUID;
 
 import javax.inject.Inject;
+import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 
 import org.forgerock.json.JsonValue;
+import org.forgerock.oauth2.core.AccessToken;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.Action;
 import org.forgerock.openam.auth.node.api.Node;
@@ -25,13 +33,17 @@ import org.forgerock.openam.auth.node.api.OutcomeProvider;
 import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValues;
+import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
+import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
+import org.forgerock.openam.http.HttpConstants;
 import org.forgerock.util.i18n.PreferredLocales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.inject.assistedinject.Assisted;
+import com.sun.identity.idm.AMIdentity;
 
 
 @Node.Metadata(
@@ -47,9 +59,10 @@ public class Authentication implements Node {
 	
 	private final Logger logger = LoggerFactory.getLogger(Authentication.class);
 	private final String loggerPrefix = "[PingOne Verify Authentication Node]" + PingOneVerifyPlugin.logAppender;
+	private AMIdentity identity = null;
 	
 	public static final String BUNDLE = Authentication.class.getName();
-
+	
 	/**
 	 * Configuration for the node.
 	 */
@@ -78,22 +91,32 @@ public class Authentication implements Node {
 			return false;
 		}
 		
-        @Attribute(order = 500)
+		@Attribute(order = 500)
+		default String userNotificationChoiceMessage() {
+			return "Choose your Delivery Method";
+		}		
+		
+        @Attribute(order = 600)
         default String pictureAttribute() {
             return "";
         }
 		
-		@Attribute(order = 600)
+		@Attribute(order = 700)
 		default String userIdAttribute() {
 			return "";
 		}
 		
-		@Attribute(order = 700)
+		@Attribute(order = 800)
 		default int timeOut() {
 			return 270;
 		}
+		
+		@Attribute(order = 900)
+		default String pollWaitMessage() {
+			return "Waiting for completion";
+		}
 
-		@Attribute(order = 800)
+		@Attribute(order = 1000)
 		default boolean demoMode() {
 			return false;
 		}
@@ -113,29 +136,110 @@ public class Authentication implements Node {
 		try {
 			logger.debug(loggerPrefix + "Started");
 			
-			
-			if (config.userNotificationChoice() && !context.hasCallbacks()) {
-				//users allowed to choose, but hasn't yet
-				return Helper.getChoiceCallback();
-			}
-			
-			int userChoice = 0;
-			if (config.userNotificationChoice()) {
-				//get the users choice
-				userChoice = context.getCallback(ConfirmationCallback.class).get().getSelectedIndex();
-			}
-			else {
-				//take the choice picked for them
-				userChoice = config.userNotification().getDeliveryMethod();
-			}
-				
-			
-			
 			NodeState ns = context.getStateFor(this);
 			
-
-			/* if we're here, something went wrong */
-			return Action.goTo(Constants.ERROR).build();
+			//check if choice exists
+			if (!ns.isDefined(Constants.VerifyAuthnChoice)) {
+				ns.putShared(Constants.VerifyAuthnChoice, UUID.randomUUID());
+				if  (config.userNotificationChoice()){
+					return Helper.getChoiceCallback(config.userNotificationChoiceMessage());
+				}				
+			}
+			
+			if (!ns.isDefined(Constants.VerifyAuthnInit)){
+				//if here then the user choose, or the admin choose for them how to verify - SMS, EMAIL, or QR
+				ns.putShared(Constants.VerifyAuthnInit, UUID.randomUUID());
+				int userChoice = 0;
+				if (config.userNotificationChoice()) {
+					//get the users choice
+					userChoice = context.getCallback(ConfirmationCallback.class).get().getSelectedIndex();
+				}
+				else {
+					//take the choice picked for them
+					userChoice = config.userNotification().getDeliveryMethod();
+				}
+				ns.putShared(Constants.VerifyUsersChoice, Integer.valueOf(userChoice));
+				//perform init on choice
+				
+				//we need to get the selfie
+				String selfie = getInfo(ns, config.pictureAttribute(), false);
+				
+				//we need to get the phone number, email or we gen a qr code
+				String phone = null;
+				String email = null;
+				switch(userChoice) {
+				case Constants.SMSNum:
+					phone = getInfo(ns, Constants.telephoneNumber, true);
+					break;
+				case Constants.eMailNum:
+					email = getInfo(ns, Constants.mail, true);
+					break;
+				}
+				
+				JsonValue body = getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
+				
+				//need to get the user id
+				String pingUID = getPingUID(ns);
+				
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				
+				JsonValue response = init(accessToken, tntpPingOneConfig, body, pingUID);
+				
+				ns.putShared(Constants.VerifyTransactionID, response.get("id").asString());
+				List<Callback> callbacks = new ArrayList<>();
+				//if we need to get a QR code, add it now
+				if (userChoice == Constants.QRNum) {
+					String webURL = response.get(Constants.webVerificationUrl).asString();
+					callbacks.add(Helper.generateQRCallback(webURL));
+				}
+				
+				String webVerCode = response.get(Constants.webVerificationCode).asString();
+				PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+				callbacks.add(pwc);
+				Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
+				callbacks.add(Constants.confirmationCancelCallback);
+				
+				long now = (new Date().getTime())/1000;
+				ns.putShared(Constants.VerifyDS, now);
+				
+				return Action.send(callbacks).build();
+				
+			}
+			
+			//if here, then the communication path has been decided, and init already happened. 
+			//we are checking if done and result
+			
+			//first check if cancelled hit
+			if (Helper.cancelPushed(context, ns)) {
+				Helper.cleanUpSS(ns, false);
+				return Action.goTo(Constants.CANCEL).build();
+			}
+			
+			//check if timeout reached
+			long startTime = ns.get(Constants.VerifyDS).asLong();
+			long now = (new Date().getTime())/1000;			
+			if((now-config.timeOut()) >= startTime) {
+				throw new Exception("Submission timeout reached");
+			}
+			
+			
+			String transactionID = ns.get(Constants.VerifyTransactionID).asString();
+			String pingOneUID = null;
+			
+			if (ns.isDefined(Constants.VerifyNeedPatch))
+				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
+			else
+				pingOneUID = ns.get(config.userIdAttribute()).asString();
+			
+			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
+			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+			JsonValue response = Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+			
+			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
+			return returnFinalStep(result, ns, response);
+			
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
 			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
@@ -144,7 +248,149 @@ public class Authentication implements Node {
 			return Action.goTo(Constants.ERROR).build();
 		}
 	}
+	
+	private Action returnFinalStep(String result, NodeState ns, JsonValue response) throws Exception {
+
+		switch (result) {
+		case Constants.REQUESTED:
+		case Constants.PARTIAL:
+		case Constants.INITIATED:
+		case Constants.IN_PROGRESS:
+			List<Callback> callbacks = new ArrayList<>();
+			// if we need to get a QR code, add it now
+			if (ns.get(Constants.VerifyUsersChoice).asInteger().intValue() == Constants.QRNum) {
+				String webURL = response.get(Constants.webVerificationUrl).asString();
+				callbacks.add(Helper.generateQRCallback(webURL));
+			}
+
+			String webVerCode = response.get(Constants.webVerificationCode).asString();
+			PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+			callbacks.add(pwc);
+			Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
+			callbacks.add(Constants.confirmationCancelCallback);
+
+			return Action.send(callbacks).build();
+			
+			//success outcomes
+		case Constants.THESUCCESS:
+		case Constants.NOT_REQUIRED:
+		case Constants.APPROVED_NO_REQUEST:
+		case Constants.APPROVED_MANUALLY:
+			Action successRetVal = null;
+			if (ns.isDefined(Constants.VerifyNeedPatch))
+				successRetVal = Action.goTo(Constants.SUCCESSPATCH).build();
+			else
+				Action.goTo(Constants.SUCCESS).build();
+			//cleanup SS
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
+			return successRetVal;
+			
+			//fail outcome
+		case Constants.THEFAIL:
+			Action failRetVal = null;
+			if (ns.isDefined(Constants.VerifyNeedPatch))
+				failRetVal = Action.goTo(Constants.FAILPATCH).build();
+			else
+				Action.goTo(Constants.FAIL).build();
+			//cleanup SS
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
+			return failRetVal;
+		}
+		/* if we're here, something went wrong */
+		return Action.goTo(Constants.ERROR).build();
+	}
+	
+	private String getInfo(NodeState ns, String det, boolean onObjectAttribute) throws Exception{
+    	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
+    		JsonValue jv = ns.get(Constants.objectAttributes);
+    		if (jv.isDefined(det))
+    			return jv.get(det).asString();
+    	}
+    	else if (!onObjectAttribute && ns.isDefined(det)) {
+    		return ns.get(det).asString();
+    	}
+    	
+    	AMIdentity thisIdentity = getUser(ns);
+        /* no identifier in sharedState, fetch from DS */
+        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
+        	return thisIdentity.getAttribute(det).iterator().next();
+        
+        return null;
+    }
+	
+	private String getPingUID(NodeState ns) throws Exception{
+		String pingUID = getInfo(ns, config.userIdAttribute(), false);
 		
+        String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users";
+        TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+		if (pingUID == null || pingUID.isBlank()) {
+			//create a new one	          
+			pingUID = Helper.createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
+			ns.putShared(Constants.VerifyNeedPatch, pingUID);
+		}
+		else {
+			//check it exists
+			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+			try {
+				JsonValue response = Helper.makeHTTPClientCall(accessToken, theURI + "/" + pingUID, HttpConstants.Methods.GET, null);
+				JsonValue theID = response.get("id");
+		        if (theID.isNotNull() && theID.isString())
+		        	pingUID = theID.asString();//hoping it's a string?
+		        else
+		        	pingUID = theID.toString();
+			}
+			catch (Exception e) {
+				//if this failed, then create new user because the id stored, couldn't be found in pingone
+				pingUID = Helper.createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
+				ns.putShared(Constants.VerifyNeedPatch, pingUID);
+			}			
+		}
+		return pingUID;
+	}
+	
+	private JsonValue init(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body, String userID) throws Exception {
+		String theURI = Constants.endpoint + worker.environmentRegion().getDomainSuffix() + "/v1/environments/" + worker.environmentId() + "/users/" + userID + "/verifyTransactions";
+		return Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.POST, body);
+	}
+	
+	private AMIdentity getUser(NodeState ns) throws Exception{
+		if (this.identity==null) {
+			String userName = ns.get(USERNAME).asString();
+			String realm = ns.get(REALM).asString();
+			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+		}
+        return this.identity;
+	}
+	    
+	private JsonValue getInitializeBody(String policyId, String telephoneNumber, String emailAddress, String selfie) {
+		
+		JsonValue body = new JsonValue(new LinkedHashMap<String, Object>(1));
+		
+		//Verify Policy ID section
+		JsonValue theID = new JsonValue(new LinkedHashMap<String, Object>(1));
+		theID.put("id", policyId);
+		body.put("verifyPolicy", theID);
+		
+		//sendNotification section
+		if ((telephoneNumber!=null && !telephoneNumber.isEmpty()) || (emailAddress!=null && !emailAddress.isEmpty())) {
+			JsonValue sendNotification = new JsonValue(new LinkedHashMap<String, Object>(1));
+			sendNotification.putIfNotNull("phone", telephoneNumber);
+			sendNotification.putIfNotNull("email", emailAddress);
+			body.put("sendNotification", sendNotification);
+		}
+		
+		//selfie section
+		JsonValue value = new JsonValue(new LinkedHashMap<String, Object>(1));
+		value.put("value", selfie);
+		
+		JsonValue refSelfie = new JsonValue(new LinkedHashMap<String, Object>(1));
+		refSelfie.put("referenceSelfie", value);
+		
+		body.put("requirements", refSelfie);
+		
+
+		return body;
+	}
 
 	public static class AuthenticationOutcomeProvider implements OutcomeProvider {
 		@Override
@@ -152,7 +398,10 @@ public class Authentication implements Node {
 			ResourceBundle bundle = locales.getBundleInPreferredLocale(Authentication.BUNDLE, OutcomeProvider.class.getClassLoader());
 			List<Outcome> results = new ArrayList<>();
 			results.add(new Outcome(Constants.SUCCESS, bundle.getString("successOutcome")));
+			results.add(new Outcome(Constants.SUCCESSPATCH, bundle.getString("successOutcomePatch")));
 			results.add(new Outcome(Constants.FAIL, bundle.getString("failOutcome")));
+			results.add(new Outcome(Constants.FAILPATCH, bundle.getString("failOutcomePatch")));
+			results.add(new Outcome(Constants.CANCEL, bundle.getString("cancelOutcome")));
 			results.add(new Outcome(Constants.ERROR, bundle.getString("errorOutcome")));
 			return Collections.unmodifiableList(results);
 		}
