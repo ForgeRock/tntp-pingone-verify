@@ -32,6 +32,11 @@ PingOne Username to Authenticate
 </td>
 </tr>
 <tr>
+<td>Delivery message choice</td>
+<td>The message to display to the user allowing them to choose which delivery route (QR, SMS, eMail) they would like to use
+</td>
+</tr>
+<tr>
 <td>Reference Picture Attribute</td>
 <td>Transient State attribute name that contains the reference picture</td>
 </tr>
@@ -42,6 +47,10 @@ PingOne Username to Authenticate
 <tr>
 <td>Submission timeout</td>
 <td>Verification submission timeout in seconds. Value must be under authentication session validity time.</td>
+</tr><tr>
+<td>Waiting message</td>
+<td>The message to display while waiting for the user to complete the authentication with PingOne Verify
+</td>
 </tr>
 <tr>
 <td>Demo mode</td>
@@ -60,9 +69,17 @@ PingOne Username to Authenticate
 
 Successfully Authenticated User
 
+`Success (Patch ID)`
+
+Successfully Authenticated User and going to Succesful Patch ID outcome
+
 `Fail`
 
 Failed to Authenticate User
+
+`Fail (Patch ID)`
+
+Failed to Authenticate User and going to Fail Path ID outcome
 
 `Error`
 There was an error within the Authentication process
