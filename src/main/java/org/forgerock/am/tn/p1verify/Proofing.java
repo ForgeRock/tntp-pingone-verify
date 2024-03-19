@@ -80,16 +80,21 @@ public class Proofing implements Node {
 		}
 		
 		@Attribute(order = 500)
+		default String userNotificationChoiceMessage() {
+			return "Choose your Delivery Method";
+		}	
+		
+		@Attribute(order = 600)
 		default Constants.GovId govId() {
 			return Constants.GovId.DEFAULT;
 		}
 
-		@Attribute(order = 600)
+		@Attribute(order = 700)
 		default String userIdAttribute() {
 			return "";
 		}
 		
-		@Attribute(order = 700)
+		@Attribute(order = 800)
 		default Map<String, String> attributeMappingConfiguration() {
 			return new HashMap<String, String>() {
 				{
@@ -127,16 +132,21 @@ public class Proofing implements Node {
 		}
 
 
-		@Attribute(order = 1100)
+		@Attribute(order = 1000)
 		default boolean failExpired() {
 			return false;
 		}
 
-		@Attribute(order = 1200)
+		@Attribute(order = 1100)
 		default int timeOut() {
 			return 270;
 		}
 
+		@Attribute(order = 1200)
+		default String pollWaitMessage() {
+			return "Waiting for completion";
+		}
+		
 		@Attribute(order = 1300)
 		default boolean saveVerifiedClaims() {
 			return false;

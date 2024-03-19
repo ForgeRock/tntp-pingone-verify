@@ -280,7 +280,7 @@ public class Authentication implements Node {
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				successRetVal = Action.goTo(Constants.SUCCESSPATCH).build();
 			else
-				Action.goTo(Constants.SUCCESS).build();
+				successRetVal = Action.goTo(Constants.SUCCESS).build();
 			//cleanup SS
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
 			return successRetVal;
@@ -291,7 +291,11 @@ public class Authentication implements Node {
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				failRetVal = Action.goTo(Constants.FAILPATCH).build();
 			else
-				Action.goTo(Constants.FAIL).build();
+				failRetVal = Action.goTo(Constants.FAIL).build();
+			
+			//if demo mode, then send to success
+			if (config.demoMode())
+				failRetVal = Action.goTo(Constants.SUCCESS).build();
 			//cleanup SS
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
 			return failRetVal;
