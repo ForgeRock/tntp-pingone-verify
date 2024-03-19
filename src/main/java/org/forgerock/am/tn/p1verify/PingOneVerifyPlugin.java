@@ -67,8 +67,7 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
 		return new ImmutableMap.Builder<String, Iterable<? extends Class<? extends Node>>>()
                 .put(currentVersion, asList(
-                						PingOneVerify.class, 
-                						Registration.class, 
+                						PingOneVerify.class,  
                 						Authentication.class,
                 						Verification.class))
                 .build();
@@ -112,7 +111,6 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 		logger.error(loggerPrefix + "currentVersion = " + currentVersion);
 		try {
 			pluginTools.upgradeAuthNode(PingOneVerify.class);
-			pluginTools.upgradeAuthNode(Registration.class);
 			pluginTools.upgradeAuthNode(Authentication.class);
 			pluginTools.upgradeAuthNode(Verification.class);
 		} catch (Exception e) {

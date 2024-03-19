@@ -16,8 +16,8 @@
 
     <groupId>org.forgerock.am.tn</groupId>
     <version>0.0.25</version>
-    <name>PingOne Verify Node</name>
-    <description>TBD</description>
+    <name>PingOne Verify Nodes</name>
+    <description>Nodes for PingOne Verify Integration</description>
 
 
 
