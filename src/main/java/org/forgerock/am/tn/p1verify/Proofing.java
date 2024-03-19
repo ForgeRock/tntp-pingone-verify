@@ -36,20 +36,20 @@ import com.google.inject.assistedinject.Assisted;
 
 
 @Node.Metadata(
-		outcomeProvider = Verification.VerificationOutcomeProvider.class, 
-		configClass = Verification.Config.class, 
+		outcomeProvider = Proofing.ProofingOutcomeProvider.class, 
+		configClass = Proofing.Config.class, 
 		tags = {"marketplace", "trustnetwork" })
-public class Verification implements Node {
+public class Proofing implements Node {
 
 	private final Config config;
 	private final Realm realm;
 	private TNTPPingOneConfig tntpPingOneConfig;
 	private final CoreWrapper coreWrapper;
 	
-	private final Logger logger = LoggerFactory.getLogger(Verification.class);
-	private final String loggerPrefix = "[PingOne Verify Verification Node]" + PingOneVerifyPlugin.logAppender;
+	private final Logger logger = LoggerFactory.getLogger(Proofing.class);
+	private final String loggerPrefix = "[PingOne Verify Proofing Node]" + PingOneVerifyPlugin.logAppender;
 	
-	public static final String BUNDLE = Verification.class.getName();
+	public static final String BUNDLE = Proofing.class.getName();
 
 	/**
 	 * Configuration for the node.
@@ -172,7 +172,7 @@ public class Verification implements Node {
 	 * @param realm  The realm the node is in.
 	 */
 	@Inject
-	public Verification(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper) {
+	public Proofing(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper) {
 		this.coreWrapper = coreWrapper;
 		this.config = config;
 		this.realm = realm;
@@ -196,10 +196,10 @@ public class Verification implements Node {
 		}
 	}
 
-	public static class VerificationOutcomeProvider implements OutcomeProvider {
+	public static class ProofingOutcomeProvider implements OutcomeProvider {
 		@Override
 		public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
-			ResourceBundle bundle = locales.getBundleInPreferredLocale(Verification.BUNDLE,
+			ResourceBundle bundle = locales.getBundleInPreferredLocale(Proofing.BUNDLE,
 					OutcomeProvider.class.getClassLoader());
 			List<Outcome> results = new ArrayList<>();
 			results.add(new Outcome(Constants.SUCCESS, bundle.getString("successOutcome")));

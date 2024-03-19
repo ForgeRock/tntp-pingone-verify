@@ -69,7 +69,7 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
                 .put(currentVersion, asList(
                 						PingOneVerify.class,  
                 						Authentication.class,
-                						Verification.class))
+                						Proofing.class))
                 .build();
 	}
 
@@ -112,7 +112,7 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 		try {
 			pluginTools.upgradeAuthNode(PingOneVerify.class);
 			pluginTools.upgradeAuthNode(Authentication.class);
-			pluginTools.upgradeAuthNode(Verification.class);
+			pluginTools.upgradeAuthNode(Proofing.class);
 		} catch (Exception e) {
 			throw new PluginException(e.getMessage());
 		}
