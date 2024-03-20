@@ -37,6 +37,8 @@ public class Constants {
 	protected final static String VerifyDS = "VerifyDS";
 	protected final static String VerifyTransactionID = "VerifyTransactionID";
 	
+	protected final static String VerifyProofChoice = "VerifyProofChoice";
+	
 	
 	
 	protected final static String telephoneNumber = "telephoneNumber";

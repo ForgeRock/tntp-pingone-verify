@@ -1,6 +1,8 @@
 package org.forgerock.am.tn.p1verify;
 
 import static org.forgerock.json.JsonValue.json;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -26,15 +28,27 @@ import org.forgerock.openam.auth.node.api.NodeState;
 import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
+import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.http.HttpConstants;
 import org.forgerock.openam.utils.qr.GenerationUtils;
 import org.forgerock.services.context.RootContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
+import com.sun.identity.idm.AMIdentity;
 
 
 public class Helper {
+	private final Logger logger = LoggerFactory.getLogger(Proofing.class);
+	private final String loggerPrefix = "[PingOne Verify Helper]" + PingOneVerifyPlugin.logAppender;
+	private AMIdentity identity = null;
+	
+	public Helper() {
+		
+	}
+	
 
 	protected static Action getChoiceCallback(String deliveryMess) throws Exception {
 		List<Callback> callbacks = new ArrayList<>();
@@ -108,7 +122,6 @@ public class Helper {
 	
 	protected static boolean cancelPushed(TreeContext context, NodeState ns) {
 		boolean retVal = false;
-		//JsonValue jv = ns.get("confirmationCB");
 		for (Iterator<? extends Callback> thisIt = context.getAllCallbacks().iterator(); thisIt.hasNext();) {
 			Callback thisCallback = thisIt.next();
 			if (thisCallback instanceof ConfirmationCallback) {
@@ -118,12 +131,6 @@ public class Helper {
 					return false;
 				else
 					return true;
-				//	break;
-				//String buttonPushed = (String) jv.asList().get(cc.getSelectedIndex());
-				//if (buttonPushed.equalsIgnoreCase("cancel")) {
-				//	retVal = true;
-				//}
-				//break;
 			}
 		}
 		return retVal;
@@ -137,6 +144,7 @@ public class Helper {
 		ns.remove(Constants.VerifyAuthnInit);
 		ns.remove(Constants.VerifyUsersChoice);	
 		ns.remove(Constants.VerifyTransactionID);	
+		ns.remove(Constants.VerifyDS);
 	}
 	
 	protected static Callback generateQRCallback(String text) {
@@ -149,6 +157,67 @@ public class Helper {
 		header.setRawValue(BearerToken.NAME + " " + bearerToken);
 		request.addHeaders(header);
 	}
+	
+	
+	
+	protected String getInfo(NodeState ns, String det, CoreWrapper coreWrapper, boolean onObjectAttribute) throws Exception{
+    	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
+    		JsonValue jv = ns.get(Constants.objectAttributes);
+    		if (jv.isDefined(det))
+    			return jv.get(det).asString();
+    	}
+    	else if (!onObjectAttribute && ns.isDefined(det)) {
+    		return ns.get(det).asString();
+    	}
+    	
+    	AMIdentity thisIdentity = getUser(ns, coreWrapper);
+        /* no identifier in sharedState, fetch from DS */
+        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
+        	return thisIdentity.getAttribute(det).iterator().next();
+        
+        return null;
+    }
+	
+	protected AMIdentity getUser(NodeState ns, CoreWrapper coreWrapper) throws Exception{
+		if (this.identity==null) {
+			String userName = ns.get(USERNAME).asString();
+			String realm = ns.get(REALM).asString();
+			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+		}
+        return this.identity;
+	}
+	
+	protected String getPingUID(NodeState ns, TNTPPingOneConfig tntpPingOneConfig, Realm realm, String userIDAttribute, CoreWrapper coreWrapper) throws Exception{
+		String pingUID = getInfo(ns, userIDAttribute, coreWrapper, false);
+		
+        String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users";
+        TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+		if (pingUID == null || pingUID.isBlank()) {
+			//create a new one	          
+			pingUID = Helper.createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
+			ns.putShared(Constants.VerifyNeedPatch, pingUID);
+		}
+		else {
+			//check it exists
+			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+			try {
+				JsonValue response = Helper.makeHTTPClientCall(accessToken, theURI + "/" + pingUID, HttpConstants.Methods.GET, null);
+				JsonValue theID = response.get("id");
+		        if (theID.isNotNull() && theID.isString())
+		        	pingUID = theID.asString();//hoping it's a string?
+		        else
+		        	pingUID = theID.toString();
+			}
+			catch (Exception e) {
+				//if this failed, then create new user because the id stored, couldn't be found in pingone
+				pingUID = Helper.createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
+				ns.putShared(Constants.VerifyNeedPatch, pingUID);
+			}			
+		}
+		return pingUID;
+	}
+	
+	
 
 	public static void main(String[] args) {
 

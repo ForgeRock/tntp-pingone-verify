@@ -8,9 +8,6 @@
 
 package org.forgerock.am.tn.p1verify;
 
-import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
-import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -43,7 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.inject.assistedinject.Assisted;
-import com.sun.identity.idm.AMIdentity;
 
 
 @Node.Metadata(
@@ -59,7 +55,6 @@ public class Authentication implements Node {
 	
 	private final Logger logger = LoggerFactory.getLogger(Authentication.class);
 	private final String loggerPrefix = "[PingOne Verify Authentication Node]" + PingOneVerifyPlugin.logAppender;
-	private AMIdentity identity = null;
 	
 	public static final String BUNDLE = Authentication.class.getName();
 	
@@ -113,7 +108,7 @@ public class Authentication implements Node {
 		
 		@Attribute(order = 900)
 		default String pollWaitMessage() {
-			return "Waiting for completion";
+			return "Waiting for completion.  Here is the code you will see on your device: %s";
 		}
 
 		@Attribute(order = 1000)
@@ -159,27 +154,31 @@ public class Authentication implements Node {
 					userChoice = config.userNotification().getDeliveryMethod();
 				}
 				ns.putShared(Constants.VerifyUsersChoice, Integer.valueOf(userChoice));
+				
+				
+				Helper thisHelper = new Helper();
+				
 				//perform init on choice
 				
 				//we need to get the selfie
-				String selfie = getInfo(ns, config.pictureAttribute(), false);
+				String selfie = thisHelper.getInfo(ns, config.pictureAttribute(), coreWrapper, false);
 				
 				//we need to get the phone number, email or we gen a qr code
 				String phone = null;
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = getInfo(ns, Constants.telephoneNumber, true);
+					phone = thisHelper.getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
 					break;
 				case Constants.eMailNum:
-					email = getInfo(ns, Constants.mail, true);
+					email = thisHelper.getInfo(ns, Constants.mail, coreWrapper, true);
 					break;
 				}
 				
 				JsonValue body = getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
 				
 				//need to get the user id
-				String pingUID = getPingUID(ns);
+				String pingUID = thisHelper.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
 				
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
@@ -229,8 +228,10 @@ public class Authentication implements Node {
 			
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
-			else
-				pingOneUID = ns.get(config.userIdAttribute()).asString();
+			else {
+				Helper thisHelper = new Helper();
+				pingOneUID = thisHelper.getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+			}
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
 			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
@@ -304,6 +305,7 @@ public class Authentication implements Node {
 		return Action.goTo(Constants.ERROR).build();
 	}
 	
+	/*
 	private String getInfo(NodeState ns, String det, boolean onObjectAttribute) throws Exception{
     	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
     		JsonValue jv = ns.get(Constants.objectAttributes);
@@ -315,13 +317,15 @@ public class Authentication implements Node {
     	}
     	
     	AMIdentity thisIdentity = getUser(ns);
-        /* no identifier in sharedState, fetch from DS */
+        // no identifier in sharedState, fetch from DS
         if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
         	return thisIdentity.getAttribute(det).iterator().next();
         
         return null;
     }
+    */
 	
+	/*
 	private String getPingUID(NodeState ns) throws Exception{
 		String pingUID = getInfo(ns, config.userIdAttribute(), false);
 		
@@ -351,12 +355,14 @@ public class Authentication implements Node {
 		}
 		return pingUID;
 	}
+	*/
 	
 	private JsonValue init(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body, String userID) throws Exception {
 		String theURI = Constants.endpoint + worker.environmentRegion().getDomainSuffix() + "/v1/environments/" + worker.environmentId() + "/users/" + userID + "/verifyTransactions";
 		return Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.POST, body);
 	}
 	
+	/*
 	private AMIdentity getUser(NodeState ns) throws Exception{
 		if (this.identity==null) {
 			String userName = ns.get(USERNAME).asString();
@@ -365,6 +371,7 @@ public class Authentication implements Node {
 		}
         return this.identity;
 	}
+	*/
 	    
 	private JsonValue getInitializeBody(String policyId, String telephoneNumber, String emailAddress, String selfie) {
 		
