@@ -305,74 +305,11 @@ public class Authentication implements Node {
 		return Action.goTo(Constants.ERROR).build();
 	}
 	
-	/*
-	private String getInfo(NodeState ns, String det, boolean onObjectAttribute) throws Exception{
-    	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
-    		JsonValue jv = ns.get(Constants.objectAttributes);
-    		if (jv.isDefined(det))
-    			return jv.get(det).asString();
-    	}
-    	else if (!onObjectAttribute && ns.isDefined(det)) {
-    		return ns.get(det).asString();
-    	}
-    	
-    	AMIdentity thisIdentity = getUser(ns);
-        // no identifier in sharedState, fetch from DS
-        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
-        	return thisIdentity.getAttribute(det).iterator().next();
-        
-        return null;
-    }
-    */
-	
-	/*
-	private String getPingUID(NodeState ns) throws Exception{
-		String pingUID = getInfo(ns, config.userIdAttribute(), false);
-		
-        String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users";
-        TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-		if (pingUID == null || pingUID.isBlank()) {
-			//create a new one	          
-			pingUID = Helper.createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
-			ns.putShared(Constants.VerifyNeedPatch, pingUID);
-		}
-		else {
-			//check it exists
-			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
-			try {
-				JsonValue response = Helper.makeHTTPClientCall(accessToken, theURI + "/" + pingUID, HttpConstants.Methods.GET, null);
-				JsonValue theID = response.get("id");
-		        if (theID.isNotNull() && theID.isString())
-		        	pingUID = theID.asString();//hoping it's a string?
-		        else
-		        	pingUID = theID.toString();
-			}
-			catch (Exception e) {
-				//if this failed, then create new user because the id stored, couldn't be found in pingone
-				pingUID = Helper.createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
-				ns.putShared(Constants.VerifyNeedPatch, pingUID);
-			}			
-		}
-		return pingUID;
-	}
-	*/
-	
 	private JsonValue init(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body, String userID) throws Exception {
 		String theURI = Constants.endpoint + worker.environmentRegion().getDomainSuffix() + "/v1/environments/" + worker.environmentId() + "/users/" + userID + "/verifyTransactions";
 		return Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.POST, body);
 	}
-	
-	/*
-	private AMIdentity getUser(NodeState ns) throws Exception{
-		if (this.identity==null) {
-			String userName = ns.get(USERNAME).asString();
-			String realm = ns.get(REALM).asString();
-			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
-		}
-        return this.identity;
-	}
-	*/
-	    
+		    
 	private JsonValue getInitializeBody(String policyId, String telephoneNumber, String emailAddress, String selfie) {
 		
 		JsonValue body = new JsonValue(new LinkedHashMap<String, Object>(1));
