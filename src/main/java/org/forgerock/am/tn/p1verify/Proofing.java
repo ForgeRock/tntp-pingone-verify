@@ -8,9 +8,6 @@
 
 package org.forgerock.am.tn.p1verify;
 
-import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
-import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -44,7 +41,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.inject.assistedinject.Assisted;
-import com.sun.identity.idm.AMIdentity;
 
 
 @Node.Metadata(
@@ -62,7 +58,6 @@ public class Proofing implements Node {
 	private final String loggerPrefix = "[PingOne Verify Proofing Node]" + PingOneVerifyPlugin.logAppender;
 	
 	public static final String BUNDLE = Proofing.class.getName();
-	private AMIdentity identity = null;
 
 	/**
 	 * Configuration for the node.
@@ -217,7 +212,7 @@ public class Proofing implements Node {
 				}				
 			}
 			
-			/*
+			
 			//if we are here, we are ready to init on choice made, or pre-set for user
 			if (!ns.isDefined(Constants.VerifyAuthnInit)){
 				//if here then the user choose, or the admin choose for them how to verify - SMS, EMAIL, or QR
@@ -232,6 +227,10 @@ public class Proofing implements Node {
 					userChoice = config.userNotification().getDeliveryMethod();
 				}
 				ns.putShared(Constants.VerifyUsersChoice, Integer.valueOf(userChoice));
+				
+				
+				Helper thisHelper = new Helper();
+				
 				//perform init on choice
 								
 				//we need to get the phone number, email or we gen a qr code
@@ -239,22 +238,22 @@ public class Proofing implements Node {
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = getInfo(ns, Constants.telephoneNumber, true);
+					phone = thisHelper.getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
 					break;
 				case Constants.eMailNum:
-					email = getInfo(ns, Constants.mail, true);
+					email = thisHelper.getInfo(ns, Constants.mail, coreWrapper, true);
 					break;
 				}
 				
-				JsonValue body = getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
+				JsonValue body = Helper.getInitializeBody(config.verifyPolicyId(), phone, email, null);
 				
 				//need to get the user id
-				String pingUID = getPingUID(ns);
+				String pingUID = thisHelper.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
 				
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
-				JsonValue response = init(accessToken, tntpPingOneConfig, body, pingUID);
+				JsonValue response = Helper.init(accessToken, tntpPingOneConfig, body, pingUID);
 				
 				ns.putShared(Constants.VerifyTransactionID, response.get("id").asString());
 				List<Callback> callbacks = new ArrayList<>();
@@ -276,11 +275,44 @@ public class Proofing implements Node {
 				return Action.send(callbacks).build();
 				
 			}
-			*/
+			
+			
+			//if here, then the communication path has been decided, and init already happened. 
+			//we are checking if done and result
+			
+			//first check if cancelled hit
+			if (Helper.cancelPushed(context, ns)) {
+				Helper.cleanUpSS(ns, false);
+				return Action.goTo(Constants.CANCEL).build();
+			}
+			
+			//check if timeout reached
+			long startTime = ns.get(Constants.VerifyDS).asLong();
+			long now = (new Date().getTime())/1000;			
+			if((now-config.timeOut()) >= startTime) {
+				throw new Exception("Submission timeout reached");
+			}
+			
+			
+			String transactionID = ns.get(Constants.VerifyTransactionID).asString();
+			String pingOneUID = null;
+			
+			if (ns.isDefined(Constants.VerifyNeedPatch))
+				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
+			else {
+				Helper thisHelper = new Helper();
+				pingOneUID = thisHelper.getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+			}
+			
+			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
+			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+			JsonValue response = Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+			
+			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
+			return returnFinalStep(result, ns, response);
 			
 
-			/* if we're here, something went wrong */
-			return Action.goTo(Constants.ERROR).build();
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
 			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
@@ -290,6 +322,62 @@ public class Proofing implements Node {
 		}
 	}
 	
+	
+	
+	private Action returnFinalStep(String result, NodeState ns, JsonValue response) throws Exception {
+
+		switch (result) {
+		case Constants.REQUESTED:
+		case Constants.PARTIAL:
+		case Constants.INITIATED:
+		case Constants.IN_PROGRESS:
+			List<Callback> callbacks = new ArrayList<>();
+			// if we need to get a QR code, add it now
+			if (ns.get(Constants.VerifyUsersChoice).asInteger().intValue() == Constants.QRNum) {
+				String webURL = response.get(Constants.webVerificationUrl).asString();
+				callbacks.add(Helper.generateQRCallback(webURL));
+			}
+
+			String webVerCode = response.get(Constants.webVerificationCode).asString();
+			PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+			callbacks.add(pwc);
+			Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
+			callbacks.add(Constants.confirmationCancelCallback);
+
+			return Action.send(callbacks).build();
+			
+			//success outcomes
+		case Constants.THESUCCESS:
+		case Constants.NOT_REQUIRED:
+		case Constants.APPROVED_NO_REQUEST:
+		case Constants.APPROVED_MANUALLY:
+			Action successRetVal = null;
+			if (ns.isDefined(Constants.VerifyNeedPatch))
+				successRetVal = Action.goTo(Constants.SUCCESSPATCH).build();
+			else
+				successRetVal = Action.goTo(Constants.SUCCESS).build();
+			//cleanup SS
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
+			return successRetVal;
+			
+			//fail outcome
+		case Constants.THEFAIL:
+			Action failRetVal = null;
+			if (ns.isDefined(Constants.VerifyNeedPatch))
+				failRetVal = Action.goTo(Constants.FAILPATCH).build();
+			else
+				failRetVal = Action.goTo(Constants.FAIL).build();
+			
+			//if demo mode, then send to success
+			if (config.demoMode())
+				failRetVal = Action.goTo(Constants.SUCCESS).build();
+			//cleanup SS
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
+			return failRetVal;
+		}
+		/* if we're here, something went wrong */
+		return Action.goTo(Constants.ERROR).build();
+	}
 	
 
 	public static class ProofingOutcomeProvider implements OutcomeProvider {

@@ -11,7 +11,6 @@ package org.forgerock.am.tn.p1verify;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.UUID;
@@ -175,7 +174,7 @@ public class Authentication implements Node {
 					break;
 				}
 				
-				JsonValue body = getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
+				JsonValue body = Helper.getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
 				
 				//need to get the user id
 				String pingUID = thisHelper.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
@@ -183,7 +182,7 @@ public class Authentication implements Node {
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
-				JsonValue response = init(accessToken, tntpPingOneConfig, body, pingUID);
+				JsonValue response = Helper.init(accessToken, tntpPingOneConfig, body, pingUID);
 				
 				ns.putShared(Constants.VerifyTransactionID, response.get("id").asString());
 				List<Callback> callbacks = new ArrayList<>();
@@ -305,41 +304,6 @@ public class Authentication implements Node {
 		return Action.goTo(Constants.ERROR).build();
 	}
 	
-	private JsonValue init(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body, String userID) throws Exception {
-		String theURI = Constants.endpoint + worker.environmentRegion().getDomainSuffix() + "/v1/environments/" + worker.environmentId() + "/users/" + userID + "/verifyTransactions";
-		return Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.POST, body);
-	}
-		    
-	private JsonValue getInitializeBody(String policyId, String telephoneNumber, String emailAddress, String selfie) {
-		
-		JsonValue body = new JsonValue(new LinkedHashMap<String, Object>(1));
-		
-		//Verify Policy ID section
-		JsonValue theID = new JsonValue(new LinkedHashMap<String, Object>(1));
-		theID.put("id", policyId);
-		body.put("verifyPolicy", theID);
-		
-		//sendNotification section
-		if ((telephoneNumber!=null && !telephoneNumber.isEmpty()) || (emailAddress!=null && !emailAddress.isEmpty())) {
-			JsonValue sendNotification = new JsonValue(new LinkedHashMap<String, Object>(1));
-			sendNotification.putIfNotNull("phone", telephoneNumber);
-			sendNotification.putIfNotNull("email", emailAddress);
-			body.put("sendNotification", sendNotification);
-		}
-		
-		//selfie section
-		JsonValue value = new JsonValue(new LinkedHashMap<String, Object>(1));
-		value.put("value", selfie);
-		
-		JsonValue refSelfie = new JsonValue(new LinkedHashMap<String, Object>(1));
-		refSelfie.put("referenceSelfie", value);
-		
-		body.put("requirements", refSelfie);
-		
-
-		return body;
-	}
-
 	public static class AuthenticationOutcomeProvider implements OutcomeProvider {
 		@Override
 		public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
