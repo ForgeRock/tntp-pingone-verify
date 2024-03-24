@@ -1,15 +1,27 @@
 package org.forgerock.am.tn.p1verify;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import javax.security.auth.callback.ConfirmationCallback;
 
+import org.forgerock.openam.license.User;
+
 public class Constants {
+	
+	
+	protected final static String ANY = "ANY";
+	protected final static String DRIVING_LICENSE = "DRIVING_LICENSE";
+	protected final static String PASSPORT = "PASSPORT";
+	protected final static String ID_CARD = "ID_CARD";
+	protected final static String RESIDENCE_PERMIT = "RESIDENCE_PERMIT";
 
 	protected enum GovId {
-
-		DEFAULT("DEFAULT"), 
-		DRIVING_LICENSE("DRIVING_LICENSE"), 
-		PASSPORT("PASSPORT"), 
-		ID_CARD("ID_CARD");
+		ANY(Constants.ANY), 
+		DRIVING_LICENSE(Constants.DRIVING_LICENSE), 
+		PASSPORT(Constants.PASSPORT), 
+		ID_CARD(Constants.ID_CARD),
+		RESIDENCE_PERMIT(Constants.RESIDENCE_PERMIT);
 
 		private final String val;
 
@@ -22,12 +34,38 @@ public class Constants {
 		}
 	}
 	
-	protected final static String QR = "QR";
-	protected final static String SMS = "SMS";
-	protected final static String eMail = "eMail";
-	protected final static int QRNum = 0;
-	protected final static int SMSNum = 1;
-	protected final static int eMailNum = 2;
+	
+	
+	protected enum Mapper {
+		
+		
+		givenName(Constants.givenName),
+		sn(Constants.sn),
+		address(Constants.address),
+		cn(Constants.cn),
+		birthDateAttribute(Constants.birthDateAttribute);
+		
+		private final String val;
+		Mapper(String val){
+			this.val = val;
+		}
+		
+		public String getDSVal() {
+			return val;
+		}
+		
+	}
+	
+	
+	protected final static String givenName = "givenName";
+	protected final static String sn = "sn";
+	protected final static String address = "address";
+	protected final static String cn = "cn";
+	protected final static String birthDateAttribute = "birthDateAttribute";
+	
+
+	
+
 	
 	//shared state variables
 	protected final static String VerifyNeedPatch = "VerifyNeedPatch";
@@ -69,6 +107,15 @@ public class Constants {
 	protected static final ConfirmationCallback confirmationCancelCallback = new ConfirmationCallback(ConfirmationCallback.INFORMATION, new String[] { "Cancel" }, 0);
 	
 	protected final static String endpoint = "https://api.pingone";
+	
+	
+	
+	protected final static String QR = "QR";
+	protected final static String SMS = "SMS";
+	protected final static String eMail = "eMail";
+	protected final static int QRNum = 0;
+	protected final static int SMSNum = 1;
+	protected final static int eMailNum = 2;
 	
 	protected enum UserNotification {
 		QR(Constants.QR), 

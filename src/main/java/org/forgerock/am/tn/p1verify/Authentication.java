@@ -56,6 +56,8 @@ public class Authentication implements Node {
 	private final String loggerPrefix = "[PingOne Verify Authentication Node]" + PingOneVerifyPlugin.logAppender;
 	
 	public static final String BUNDLE = Authentication.class.getName();
+	private final Helper client;
+	
 	
 	/**
 	 * Configuration for the node.
@@ -118,11 +120,12 @@ public class Authentication implements Node {
 	}
 
 	@Inject
-	public Authentication(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper) {
+	public Authentication(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
 		this.coreWrapper = coreWrapper;
 		this.config = config;
 		this.realm = realm;
 		this.tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(config.tntpPingOneConfigName());
+		this.client = client;
 	}
 
 	@Override
@@ -155,34 +158,34 @@ public class Authentication implements Node {
 				ns.putShared(Constants.VerifyUsersChoice, Integer.valueOf(userChoice));
 				
 				
-				Helper thisHelper = new Helper();
+				
 				
 				//perform init on choice
 				
 				//we need to get the selfie
-				String selfie = thisHelper.getInfo(ns, config.pictureAttribute(), coreWrapper, false);
+				String selfie = client.getInfo(ns, config.pictureAttribute(), coreWrapper, false);
 				
 				//we need to get the phone number, email or we gen a qr code
 				String phone = null;
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = thisHelper.getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
+					phone = client.getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
 					break;
 				case Constants.eMailNum:
-					email = thisHelper.getInfo(ns, Constants.mail, coreWrapper, true);
+					email = client.getInfo(ns, Constants.mail, coreWrapper, true);
 					break;
 				}
 				
 				JsonValue body = Helper.getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
 				
 				//need to get the user id
-				String pingUID = thisHelper.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
+				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
 				
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
-				JsonValue response = Helper.init(accessToken, tntpPingOneConfig, body, pingUID);
+				JsonValue response = client.init(accessToken, tntpPingOneConfig, body, pingUID);
 				
 				ns.putShared(Constants.VerifyTransactionID, response.get("id").asString());
 				List<Callback> callbacks = new ArrayList<>();
@@ -228,14 +231,14 @@ public class Authentication implements Node {
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
 			else {
-				Helper thisHelper = new Helper();
-				pingOneUID = thisHelper.getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				
+				pingOneUID = client.getInfo(ns, config.userIdAttribute(), coreWrapper, false);
 			}
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
 			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
-			JsonValue response = Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+			JsonValue response = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 			
 			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
 			return returnFinalStep(result, ns, response);
@@ -243,8 +246,8 @@ public class Authentication implements Node {
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
 			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
-			context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
-			context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
+			context.getStateFor(this).putTransient(loggerPrefix + "Exception", ex.getMessage());
+			context.getStateFor(this).putTransient(loggerPrefix + "StackTrace", stackTrace);
 			return Action.goTo(Constants.ERROR).build();
 		}
 	}

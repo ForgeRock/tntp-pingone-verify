@@ -12,9 +12,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.inject.Inject;
@@ -58,6 +61,7 @@ public class Proofing implements Node {
 	private final String loggerPrefix = "[PingOne Verify Proofing Node]" + PingOneVerifyPlugin.logAppender;
 	
 	public static final String BUNDLE = Proofing.class.getName();
+	private final Helper client;
 
 	/**
 	 * Configuration for the node.
@@ -94,7 +98,7 @@ public class Proofing implements Node {
 		
 		@Attribute(order = 600)
 		default Constants.GovId govId() {
-			return Constants.GovId.DEFAULT;
+			return Constants.GovId.ANY;
 		}
 
 		@Attribute(order = 700)
@@ -102,7 +106,12 @@ public class Proofing implements Node {
 			return "";
 		}
 		
-		@Attribute(order = 800)
+        @Attribute(order = 800)
+        default int dobVerification() {
+        	return 0;
+        }
+		
+		@Attribute(order = 900)
 		default Map<String, String> attributeMappingConfiguration() {
 			return new HashMap<String, String>() {
 				{
@@ -123,59 +132,59 @@ public class Proofing implements Node {
 			};
 		}
 
-		@Attribute(order = 900)
+		@Attribute(order = 1000)
 		default Map<String, String> fuzzyMatchingConfiguration() {
 			return new HashMap<String, String>() {
 				{
 					/*
 					 * key is DS attribute name, value is the confidence level required for success
-					 */
-					put("givenName", "LOW");
-					put("sn", "HIGH");
-					put("address", "LOW");
-					put("cn", "MEDIUM");
-					put("birthDateAttribute", "EXACT");
+					 */					
+	                put(Constants.givenName, "LOW");
+	                put(Constants.sn, "HIGH");
+	                put(Constants.address, "MEDIUM");
+	                put(Constants.cn, "LOW");
+	                put(Constants.birthDateAttribute, "EXACT");
 				}
 			};
 		}
 
 
-		@Attribute(order = 1000)
+		@Attribute(order = 1100)
 		default boolean failExpired() {
 			return false;
 		}
 
-		@Attribute(order = 1100)
+		@Attribute(order = 1200)
 		default int timeOut() {
 			return 270;
 		}
 
-		@Attribute(order = 1200)
+		@Attribute(order = 1300)
 		default String pollWaitMessage() {
 			return "Waiting for completion";
 		}
 		
-		@Attribute(order = 1300)
+		@Attribute(order = 1400)
 		default boolean saveVerifiedClaims() {
 			return false;
 		}
 
-		@Attribute(order = 1400)
+		@Attribute(order = 1500)
 		default boolean saveMetadata() {
 			return false;
 		}
 
-		@Attribute(order = 1500)
+		@Attribute(order = 1600)
 		default boolean tsAccessToken() {
 			return false;
 		}
 
-		@Attribute(order = 1600)
+		@Attribute(order = 1700)
 		default boolean tsTransactionId() {
 			return false;
 		}
 
-		@Attribute(order = 1700)
+		@Attribute(order = 1800)
 		default boolean demoMode() {
 			return false;
 		}
@@ -190,11 +199,12 @@ public class Proofing implements Node {
 	 * @param realm  The realm the node is in.
 	 */
 	@Inject
-	public Proofing(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper) {
+	public Proofing(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
 		this.coreWrapper = coreWrapper;
 		this.config = config;
 		this.realm = realm;
 		this.tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(config.tntpPingOneConfigName());
+		this.client = client;
 	}
 
 	@Override
@@ -228,9 +238,6 @@ public class Proofing implements Node {
 				}
 				ns.putShared(Constants.VerifyUsersChoice, Integer.valueOf(userChoice));
 				
-				
-				Helper thisHelper = new Helper();
-				
 				//perform init on choice
 								
 				//we need to get the phone number, email or we gen a qr code
@@ -238,22 +245,22 @@ public class Proofing implements Node {
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = thisHelper.getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
+					phone = client.getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
 					break;
 				case Constants.eMailNum:
-					email = thisHelper.getInfo(ns, Constants.mail, coreWrapper, true);
+					email = client.getInfo(ns, Constants.mail, coreWrapper, true);
 					break;
 				}
 				
-				JsonValue body = Helper.getInitializeBody(config.verifyPolicyId(), phone, email, null);
+				JsonValue body = getInitBody(config.verifyPolicyId(), phone, email, ns);
 				
 				//need to get the user id
-				String pingUID = thisHelper.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
+				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
 				
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
-				JsonValue response = Helper.init(accessToken, tntpPingOneConfig, body, pingUID);
+				JsonValue response = client.init(accessToken, tntpPingOneConfig, body, pingUID);
 				
 				ns.putShared(Constants.VerifyTransactionID, response.get("id").asString());
 				List<Callback> callbacks = new ArrayList<>();
@@ -300,14 +307,13 @@ public class Proofing implements Node {
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
 			else {
-				Helper thisHelper = new Helper();
-				pingOneUID = thisHelper.getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				pingOneUID = client.getInfo(ns, config.userIdAttribute(), coreWrapper, false);
 			}
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
 			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
-			JsonValue response = Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+			JsonValue response = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 			
 			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
 			return returnFinalStep(result, ns, response);
@@ -316,12 +322,54 @@ public class Proofing implements Node {
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
 			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
-			context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
-			context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
+			context.getStateFor(this).putTransient(loggerPrefix + "Exception", ex.getMessage());
+			context.getStateFor(this).putTransient(loggerPrefix + "StackTrace", stackTrace);
 			return Action.goTo(Constants.ERROR).build();
 		}
 	}
 	
+	
+	private JsonValue getInitBody(String policyId, String telephoneNumber, String emailAddress, NodeState ns) throws Exception{
+		
+		JsonValue body = new JsonValue(new LinkedHashMap<String, Object>(1));
+		
+		//Verify Policy ID section
+		JsonValue theID = new JsonValue(new LinkedHashMap<String, Object>(1));
+		theID.put("id", policyId);
+		body.put("verifyPolicy", theID);
+		
+		//sendNotification section
+		if ((telephoneNumber!=null && !telephoneNumber.isEmpty()) || (emailAddress!=null && !emailAddress.isEmpty())) {
+			JsonValue sendNotification = new JsonValue(new LinkedHashMap<String, Object>(1));
+			sendNotification.putIfNotNull("phone", telephoneNumber);
+			sendNotification.putIfNotNull("email", emailAddress);
+			body.put("sendNotification", sendNotification);
+		}
+		
+		//BIOGRAPHIC_MATCHER
+		if (config.fuzzyMatchingConfiguration() != null && !config.fuzzyMatchingConfiguration().isEmpty()) {
+			Set<String> keys = config.fuzzyMatchingConfiguration().keySet();
+			JsonValue thisJVKey = new JsonValue(new LinkedHashMap<String, Object>(1));
+			for(Iterator<String> i = keys.iterator(); i.hasNext();) {
+				String thisKey = i.next();
+				//get the value for the key from shared state or user
+				String thisVal = client.getInfo(ns, thisKey, coreWrapper, true);
+				if (thisVal!=null) {
+					JsonValue value = new JsonValue(new LinkedHashMap<String, Object>(1));
+					value.put("value", thisVal);
+
+					thisJVKey.put(Helper.getFuzzyVal(thisKey), value);
+				}
+				else {
+					throw new Exception(thisKey + " was not found on the Journey state or on the user.");
+				}
+			}
+			body.put("requirements", thisJVKey);
+			
+			
+		}
+		return body;
+	}
 	
 	
 	private Action returnFinalStep(String result, NodeState ns, JsonValue response) throws Exception {
@@ -356,6 +404,20 @@ public class Proofing implements Node {
 				successRetVal = Action.goTo(Constants.SUCCESSPATCH).build();
 			else
 				successRetVal = Action.goTo(Constants.SUCCESS).build();
+			
+			
+			//gov ID check needed?
+			successRetVal = govIDCheck(successRetVal);
+			
+			//fuzzy matching check
+			successRetVal = fuzzyMatchCheck(successRetVal);
+			
+			//failed expired check
+			successRetVal = expiredDocCheck(successRetVal);
+			
+			
+			
+			
 			//cleanup SS
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
 			return successRetVal;
@@ -379,7 +441,40 @@ public class Proofing implements Node {
 		return Action.goTo(Constants.ERROR).build();
 	}
 	
+	
+	//govID check
+	private Action govIDCheck(Action currentAction) throws Exception{
+		//TODO
+		
+		switch(config.govId().getVal()) {
+			case Constants.DRIVING_LICENSE:
+				
+				
+			case Constants.ID_CARD:
+				
+			
+			case Constants.RESIDENCE_PERMIT:
+				
+			case Constants.PASSPORT:
+				
+			case Constants.ANY:
+		
+		}
+		
+		return currentAction;
+	}
 
+	
+	private Action fuzzyMatchCheck(Action currentAction) throws Exception{
+		return currentAction;
+//TODO
+	}
+
+	private Action expiredDocCheck(Action currentAction) throws Exception{
+		return currentAction;
+//TODO
+	}
+	
 	public static class ProofingOutcomeProvider implements OutcomeProvider {
 		@Override
 		public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {

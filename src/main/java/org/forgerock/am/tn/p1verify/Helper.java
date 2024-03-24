@@ -4,6 +4,7 @@ import static org.forgerock.json.JsonValue.json;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -11,10 +12,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 import javax.security.auth.callback.TextOutputCallback;
 
+import org.forgerock.http.HttpApplicationException;
 import org.forgerock.http.handler.HttpClientHandler;
 import org.forgerock.http.header.AuthorizationHeader;
 import org.forgerock.http.header.MalformedHeaderException;
@@ -33,20 +37,30 @@ import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.http.HttpConstants;
 import org.forgerock.openam.utils.qr.GenerationUtils;
 import org.forgerock.services.context.RootContext;
+import org.forgerock.util.thread.listener.ShutdownManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
 import com.sun.identity.idm.AMIdentity;
 
-
+@Singleton
 public class Helper {
 	private final Logger logger = LoggerFactory.getLogger(Proofing.class);
 	private final String loggerPrefix = "[PingOne Verify Helper]" + PingOneVerifyPlugin.logAppender;
 	private AMIdentity identity = null;
+	private final HttpClientHandler handler;
 	
-	public Helper() {
-		
+	@Inject
+	public Helper(ShutdownManager shutdownManager) throws HttpApplicationException{
+	    this.handler = new HttpClientHandler();
+	    shutdownManager.addShutdownListener(() -> {
+	      try {
+	        handler.close();
+	      } catch (IOException e) {
+	        logger.error(loggerPrefix + " Could not close HTTP client", e);
+	      }
+	    });
 	}
 	
 
@@ -61,7 +75,7 @@ public class Helper {
 		return Action.send(callbacks).build();
 	}
 
-	protected static String createPingUID(TNTPPingOneUtility tntpP1U, String theURI, Realm realm, TNTPPingOneConfig tntpPingOneConfig) throws Exception {
+	protected String createPingUID(TNTPPingOneUtility tntpP1U, String theURI, Realm realm, TNTPPingOneConfig tntpPingOneConfig) throws Exception {
 		String retVal = null;
 		JsonValue createUidBody = new JsonValue(new LinkedHashMap<String, Object>(1));
 		createUidBody.put("username", UUID.randomUUID().toString());
@@ -79,9 +93,8 @@ public class Helper {
 		return retVal;
 	}
 
-	protected static JsonValue makeHTTPClientCall(AccessToken accessToken, String theURI, String method, JsonValue body) throws Exception {
+	protected JsonValue makeHTTPClientCall(AccessToken accessToken, String theURI, String method, JsonValue body) throws Exception {
 		Request request = null;
-		HttpClientHandler handler = null;
 		try {
 			URI uri = URI.create(theURI);
 
@@ -90,7 +103,6 @@ public class Helper {
 			if (body != null && body.isNotNull())
 				request.getEntity().setJson(body);
 			addAuthorizationHeader(request, accessToken);
-			handler = new HttpClientHandler();
 			Response response = handler.handle(new RootContext(), request).getOrThrow();
 
 			if (response.getStatus().isSuccessful()) {
@@ -100,22 +112,6 @@ public class Helper {
 			}
 		} catch (Exception e) {
 			throw new Exception("Failed PingOne Verify", e);
-		} finally {
-			if (handler != null) {
-				try {
-					handler.close();
-				} catch (Exception e) {
-					// DO NOTHING
-				}
-			}
-
-			if (request != null) {
-				try {
-					request.close();
-				} catch (Exception e) {
-					// DO NOTHING
-				}
-			}
 		}
 
 	}
@@ -194,14 +190,14 @@ public class Helper {
         TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 		if (pingUID == null || pingUID.isBlank()) {
 			//create a new one	          
-			pingUID = Helper.createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
+			pingUID = createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
 			ns.putShared(Constants.VerifyNeedPatch, pingUID);
 		}
 		else {
 			//check it exists
 			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 			try {
-				JsonValue response = Helper.makeHTTPClientCall(accessToken, theURI + "/" + pingUID, HttpConstants.Methods.GET, null);
+				JsonValue response = makeHTTPClientCall(accessToken, theURI + "/" + pingUID, HttpConstants.Methods.GET, null);
 				JsonValue theID = response.get("id");
 		        if (theID.isNotNull() && theID.isString())
 		        	pingUID = theID.asString();//hoping it's a string?
@@ -210,16 +206,16 @@ public class Helper {
 			}
 			catch (Exception e) {
 				//if this failed, then create new user because the id stored, couldn't be found in pingone
-				pingUID = Helper.createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
+				pingUID = createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
 				ns.putShared(Constants.VerifyNeedPatch, pingUID);
 			}			
 		}
 		return pingUID;
 	}
 	
-	protected static JsonValue init(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body, String userID) throws Exception {
+	protected JsonValue init(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body, String userID) throws Exception {
 		String theURI = Constants.endpoint + worker.environmentRegion().getDomainSuffix() + "/v1/environments/" + worker.environmentId() + "/users/" + userID + "/verifyTransactions";
-		return Helper.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.POST, body);
+		return makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.POST, body);
 	}
 	
 	protected static JsonValue getInitializeBody(String policyId, String telephoneNumber, String emailAddress, String selfie) {
@@ -254,7 +250,21 @@ public class Helper {
 		return body;
 	}
 
-	
+	protected static String getFuzzyVal(String val) {
+		switch(val) {
+		case Constants.givenName:
+			return "given_name";
+		case Constants.sn:
+			return "family_name";
+		case Constants.address:
+			return Constants.address;
+		case Constants.cn:
+			return "name";
+		case Constants.birthDateAttribute:
+			return "birth_date";
+		}
+		return val;
+	}
 	
 
 	public static void main(String[] args) {
