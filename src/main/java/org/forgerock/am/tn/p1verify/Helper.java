@@ -46,7 +46,7 @@ import com.sun.identity.idm.AMIdentity;
 
 @Singleton
 public class Helper {
-	private final Logger logger = LoggerFactory.getLogger(Proofing.class);
+	private final Logger logger = LoggerFactory.getLogger(Helper.class);
 	private final String loggerPrefix = "[PingOne Verify Helper]" + PingOneVerifyPlugin.logAppender;
 	private AMIdentity identity = null;
 	private final HttpClientHandler handler;
@@ -141,6 +141,7 @@ public class Helper {
 		ns.remove(Constants.VerifyUsersChoice);	
 		ns.remove(Constants.VerifyTransactionID);	
 		ns.remove(Constants.VerifyDS);
+		ns.remove(Constants.VerifyProofID);
 	}
 	
 	protected static Callback generateQRCallback(String text) {
@@ -256,7 +257,7 @@ public class Helper {
 			return "given_name";
 		case Constants.sn:
 			return "family_name";
-		case Constants.address:
+		case Constants.postalAddress://does this cover both idm and am?  test in cloud TODO
 			return Constants.address;
 		case Constants.cn:
 			return "name";
@@ -266,7 +267,39 @@ public class Helper {
 		return val;
 	}
 	
-
+	
+	protected static String getFRVal(String val) {
+		switch(val) {
+		case "given_name":
+			return Constants.givenName;
+		case "family_name":
+			return Constants.sn;
+		case Constants.address:
+			return Constants.postalAddress;//does this cover both idm and am?  test in cloud TODO
+		case "name":
+			return Constants.cn;
+		case "birth_date":
+			return Constants.birthDateAttribute;//may not have bday in am
+		}
+		return val;
+	}
+	
+	protected static String getClaimVal(String val) {
+		switch(val) {
+		case "given_name":
+			return "firstName";
+		case "family_name":
+			return "lastName";
+		case Constants.address:
+			return "addressStreet";
+		case "name":
+			return "fullName";
+		case "birth_date":
+			return "birthDate";
+		}
+		return val;
+	}
+	
 	public static void main(String[] args) {
 
 		 //JsonValue ja = normalizeClaims(true, "PingOneIdentityProviderHandlerNode", null);

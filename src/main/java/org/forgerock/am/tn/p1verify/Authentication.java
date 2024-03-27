@@ -245,7 +245,7 @@ public class Authentication implements Node {
 			
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
-			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
+			logger.error(loggerPrefix + "Exception occurred: ", ex);
 			context.getStateFor(this).putTransient(loggerPrefix + "Exception", ex.getMessage());
 			context.getStateFor(this).putTransient(loggerPrefix + "StackTrace", stackTrace);
 			return Action.goTo(Constants.ERROR).build();

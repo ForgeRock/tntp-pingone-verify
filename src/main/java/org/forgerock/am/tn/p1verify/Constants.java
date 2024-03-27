@@ -1,11 +1,6 @@
 package org.forgerock.am.tn.p1verify;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import javax.security.auth.callback.ConfirmationCallback;
-
-import org.forgerock.openam.license.User;
 
 public class Constants {
 	
@@ -59,6 +54,10 @@ public class Constants {
 	
 	protected final static String givenName = "givenName";
 	protected final static String sn = "sn";
+	
+	//am
+	protected final static String postalAddress = "postalAddress";
+	
 	protected final static String address = "address";
 	protected final static String cn = "cn";
 	protected final static String birthDateAttribute = "birthDateAttribute";
@@ -75,8 +74,16 @@ public class Constants {
 	protected final static String VerifyDS = "VerifyDS";
 	protected final static String VerifyTransactionID = "VerifyTransactionID";
 	
+	protected final static String VerifyProofID = "VerifyProofID";
+	
+	
 	protected final static String VerifyProofChoice = "VerifyProofChoice";
 	
+	
+	//shared state var don't remove
+	protected final static String VerifedFailedReason = "VerifedFailedReason";
+	protected final static String VerifyMetadataResult = "VerifyMetadataResult";
+	protected final static String VerifyClaimResult = "VerifyClaimResult";
 	
 	
 	protected final static String telephoneNumber = "telephoneNumber";

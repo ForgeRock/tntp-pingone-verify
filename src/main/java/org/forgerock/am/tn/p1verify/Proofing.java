@@ -8,6 +8,10 @@
 
 package org.forgerock.am.tn.p1verify;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -40,6 +44,8 @@ import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.http.HttpConstants;
 import org.forgerock.util.i18n.PreferredLocales;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -122,7 +128,7 @@ public class Proofing implements Node {
 					put("givenName", "firstName");
 					put("sn", "lastName");
 					put("cn", "fullName");
-					put("postalAddress", "address");
+					put("postalAddress", "addressStreet");
 					put("country", "country");
 					put("birthDateAttribute", "birthDate");
 					put("idNumberAttribute", "idNumber");
@@ -161,7 +167,7 @@ public class Proofing implements Node {
 
 		@Attribute(order = 1300)
 		default String pollWaitMessage() {
-			return "Waiting for completion";
+			return "Waiting for completion.  Here is the code you will see on your device: %s";
 		}
 		
 		@Attribute(order = 1400)
@@ -257,6 +263,8 @@ public class Proofing implements Node {
 				//need to get the user id
 				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
 				
+				ns.putShared(Constants.VerifyProofID, pingUID);
+				
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
@@ -321,7 +329,7 @@ public class Proofing implements Node {
 
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
-			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
+			logger.error(loggerPrefix + "Exception occurred: ", ex);
 			context.getStateFor(this).putTransient(loggerPrefix + "Exception", ex.getMessage());
 			context.getStateFor(this).putTransient(loggerPrefix + "StackTrace", stackTrace);
 			return Action.goTo(Constants.ERROR).build();
@@ -405,19 +413,32 @@ public class Proofing implements Node {
 			else
 				successRetVal = Action.goTo(Constants.SUCCESS).build();
 			
+			//retrieve verified data
+			JsonValue userData = retrieveUserData(ns);
 			
-			//gov ID check needed?
-			successRetVal = govIDCheck(successRetVal);
+			//ensure map complete
+			mapClaims(ns, userData);
+			
+			//gov ID check
+			if (!govIDCheckPass(ns, userData)) {
+				successRetVal = Action.goTo(Constants.FAIL).build();
+			}
+				
+			//failed expired check
+			else if (!expiredDocCheck(ns, userData)) {
+				successRetVal = Action.goTo(Constants.FAIL).build();
+			}
+			
+			//age threshold check
+			else if (!dobCheck(ns, userData)) {
+				successRetVal = Action.goTo(Constants.FAIL).build();
+			}
 			
 			//fuzzy matching check
-			successRetVal = fuzzyMatchCheck(successRetVal);
-			
-			//failed expired check
-			successRetVal = expiredDocCheck(successRetVal);
-			
-			
-			
-			
+			else if (!fuzzyMatchCheck(ns, userData)) {
+				successRetVal = Action.goTo(Constants.FAIL).build();
+			}
+
 			//cleanup SS
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
 			return successRetVal;
@@ -441,38 +462,196 @@ public class Proofing implements Node {
 		return Action.goTo(Constants.ERROR).build();
 	}
 	
+
+	private JsonValue retrieveUserData(NodeState ns) throws Exception{
+		JsonValue retVal = null;
+		
+		String pingUID = ns.get(Constants.VerifyProofID).asString();
+		String txID = ns.get(Constants.VerifyTransactionID).asString();
+		
+		String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingUID + "/verifyTransactions/" + txID + "/verifiedData?type=GOVERNMENT_ID";
+		
+		TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+		AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+		
+		retVal = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+		
+		retVal = retVal.get("_embedded").get("verifiedData").get(0).get("data");
+		
+		if (config.saveVerifiedClaims())
+			ns.putTransient(Constants.VerifyClaimResult, retVal);
+
+		return retVal;
+	}
 	
 	//govID check
-	private Action govIDCheck(Action currentAction) throws Exception{
-		//TODO
+	private boolean govIDCheckPass(NodeState ns, JsonValue claimData) throws Exception{
+		boolean retVal = false;
+		String thisGovIDCheck = claimData.get("idType").toString();
+		
+		thisGovIDCheck = thisGovIDCheck.toLowerCase();
+		
+		String cardToCompare = "";
 		
 		switch(config.govId().getVal()) {
 			case Constants.DRIVING_LICENSE:
-				
-				
+				cardToCompare = "DriversLicense";
+				break;
 			case Constants.ID_CARD:
-				
-			
+				cardToCompare = "IdentificationCard";
+				break;				
 			case Constants.RESIDENCE_PERMIT:
-				
+				cardToCompare = "ResidencePermit";
+				break;					
 			case Constants.PASSPORT:
-				
+				cardToCompare = "Passport";
+				break;					
 			case Constants.ANY:
-		
 		}
 		
-		return currentAction;
+		if (thisGovIDCheck.contains(cardToCompare.toLowerCase()) || config.govId().getVal().equalsIgnoreCase(Constants.ANY)) {
+			retVal = true;
+		}
+		else {
+			ns.putShared(Constants.VerifedFailedReason, "Document type required - failed");
+		}
+		
+		return retVal;
 	}
 
+	private boolean fuzzyMatchCheck(NodeState ns, JsonValue claimData) throws Exception{
+		
+		
+		Map<String, String> fuzzyMap = config.fuzzyMatchingConfiguration();
+		
+		//if nothing in fuzzy mapping, and we don't need to save the metadata - return true
+		if ((fuzzyMap==null || fuzzyMap.isEmpty()) && !config.saveMetadata())
+			return true;
+		
+		//if here, we need to get the metadata
+		String pingUID = ns.get(Constants.VerifyProofID).asString();
+		String txID = ns.get(Constants.VerifyTransactionID).asString();
+		
+		String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingUID + "/verifyTransactions/" + txID + "/metaData";
+		                                                                                                                                                       
+		
+		TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+		AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+		
+		JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+		
+		//save metadata
+		if (config.saveMetadata()) {
+			ns.putTransient(Constants.VerifyMetadataResult, metadata);
+			
+			//if nothing in fuzzy mapping - return true
+			if (fuzzyMap==null || fuzzyMap.isEmpty())
+				return true;
+		}
+		
+		//if here, we need to compare the biographic_match_results
+		for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext();) {
+			JsonValue thisOne = i.next();
+			if (thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
+				//last check do the levels match?  If exact, compare manually  
+				for(Iterator<JsonValue> innerIt = thisOne.get("data").get("biographic_match_results").iterator(); innerIt.hasNext();) {
+					JsonValue thisInnerOne = innerIt.next();
+					//Identifier can be different for onprem vs cloud TODO
+					String thisAttr = thisInnerOne.get("identifier").asString();
+					String thisConf = thisInnerOne.get("match").asString();
+					
+					String expectedConf = fuzzyMap.get(Helper.getFRVal(thisAttr));
+					
+					
+					switch(expectedConf) {
+					case "EXACT":
+						String expectedAttr = client.getInfo(ns, Helper.getFRVal(thisAttr), coreWrapper, true);
+						String claimAttr = claimData.get(Helper.getClaimVal(thisAttr)).asString();
+						if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
+							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+							return false;
+						}
+						break;
+					case "HIGH":
+						if (!thisConf.equalsIgnoreCase("HIGH")) {
+							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+							return false;
+						}
+						break;
+					case "MEDIUM":
+						if (thisConf.equalsIgnoreCase("LOW") || thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
+							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+							return false;
+						}
+						break;
+					case "LOW":
+						if (thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
+							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+							return false;
+						}
+						break;						
+					}
+				}
+				return true;
+			}
+		}
+		
+		ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+		return false;
+//TODO lots of testing
+	}
+
+	private boolean expiredDocCheck(NodeState ns, JsonValue claimData) throws Exception{
+		String expirationDateClaim = claimData.get("expirationDate").asString();
+		
+        String toParse = expirationDateClaim + " 00:00:01.000-00:00";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
+        OffsetDateTime dateTime = OffsetDateTime.parse(toParse, formatter);
+        Instant now = Instant.now();
+        long days = ChronoUnit.DAYS.between(now, dateTime.toInstant());
+        if(days<0) {
+        	ns.putShared(Constants.VerifedFailedReason, "Fail expired documents - failed");
+            return false;
+        } else {
+            return true;
+        }
+	}
 	
-	private Action fuzzyMatchCheck(Action currentAction) throws Exception{
-		return currentAction;
-//TODO
+	
+	private void mapClaims(NodeState ns, JsonValue returnedClaims) throws Exception{
+		
+        JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
+        JSONArray keys = attributeMap.names();
+        JsonValue objectAttributes = ns.get("objectAttributes");
+        
+        if (objectAttributes==null || objectAttributes.isNull()) {
+        	objectAttributes = new JsonValue(new LinkedHashMap<String, Object>(1));
+        }
+        
+        for (int i = 0; i < keys.length(); i++) {
+            String key = keys.getString(i);
+            String value = attributeMap.getString (key);
+            if(returnedClaims.isDefined(value)){
+            	objectAttributes.put(key, returnedClaims.get(value).getObject());
+            }
+        }
+        ns.putShared("objectAttributes",objectAttributes);
 	}
-
-	private Action expiredDocCheck(Action currentAction) throws Exception{
-		return currentAction;
-//TODO
+	
+	private boolean dobCheck(NodeState ns, JsonValue claimData) throws Exception{
+		
+		String dobClaim = claimData.get("birthDate").asString();
+		
+        String toParse = dobClaim + " 00:00:01.000-00:00";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
+        OffsetDateTime dobTime = OffsetDateTime.parse(toParse, formatter);
+        OffsetDateTime limitTime = OffsetDateTime.now();
+        limitTime = limitTime.minusYears(config.dobVerification());
+        if (dobTime.isBefore(limitTime)) {
+        	return true;
+        }
+        ns.putShared(Constants.VerifedFailedReason, "Age threshold - failed");
+        return false;		
 	}
 	
 	public static class ProofingOutcomeProvider implements OutcomeProvider {
