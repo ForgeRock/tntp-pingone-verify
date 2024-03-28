@@ -184,7 +184,7 @@ public class Helper {
         return this.identity;
 	}
 	
-	protected String getPingUID(NodeState ns, TNTPPingOneConfig tntpPingOneConfig, Realm realm, String userIDAttribute, CoreWrapper coreWrapper) throws Exception{
+	protected String getPingUID(NodeState ns, TNTPPingOneConfig tntpPingOneConfig, Realm realm, String userIDAttribute, CoreWrapper coreWrapper, String uidAttrName) throws Exception{
 		String pingUID = getInfo(ns, userIDAttribute, coreWrapper, false);
 		
         String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users";
@@ -193,6 +193,13 @@ public class Helper {
 			//create a new one	          
 			pingUID = createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
 			ns.putShared(Constants.VerifyNeedPatch, pingUID);
+	        JsonValue objectAttributes = ns.get("objectAttributes");
+	        
+	        if (objectAttributes==null || objectAttributes.isNull()) {
+	        	objectAttributes = new JsonValue(new LinkedHashMap<String, Object>(1));
+	        }
+	        objectAttributes.put(uidAttrName, pingUID);
+	        
 		}
 		else {
 			//check it exists
@@ -209,6 +216,12 @@ public class Helper {
 				//if this failed, then create new user because the id stored, couldn't be found in pingone
 				pingUID = createPingUID(tntpP1U, theURI, realm, tntpPingOneConfig);
 				ns.putShared(Constants.VerifyNeedPatch, pingUID);
+		        JsonValue objectAttributes = ns.get("objectAttributes");
+		        
+		        if (objectAttributes==null || objectAttributes.isNull()) {
+		        	objectAttributes = new JsonValue(new LinkedHashMap<String, Object>(1));
+		        }
+		        objectAttributes.put(uidAttrName, pingUID);
 			}			
 		}
 		return pingUID;

@@ -261,7 +261,7 @@ public class Proofing implements Node {
 				JsonValue body = getInitBody(config.verifyPolicyId(), phone, email, ns);
 				
 				//need to get the user id
-				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper);
+				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper, config.userIdAttribute());
 				
 				ns.putShared(Constants.VerifyProofID, pingUID);
 				
