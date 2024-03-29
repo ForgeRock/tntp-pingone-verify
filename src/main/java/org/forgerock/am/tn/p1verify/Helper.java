@@ -199,6 +199,7 @@ public class Helper {
 	        	objectAttributes = new JsonValue(new LinkedHashMap<String, Object>(1));
 	        }
 	        objectAttributes.put(uidAttrName, pingUID);
+	        ns.putShared("objectAttributes", objectAttributes);
 	        
 		}
 		else {
@@ -222,6 +223,7 @@ public class Helper {
 		        	objectAttributes = new JsonValue(new LinkedHashMap<String, Object>(1));
 		        }
 		        objectAttributes.put(uidAttrName, pingUID);
+		        ns.putShared("objectAttributes", objectAttributes);
 			}			
 		}
 		return pingUID;
