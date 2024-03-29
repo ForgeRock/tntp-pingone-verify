@@ -1,18 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
- * The contents of this file are subject to the terms of the Common Development and
- * Distribution License (the License). You may not use this file except in compliance with the
- * License.
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services. 
+ * Ping Identity Corporation only offers such software or services to legal entities who have entered into 
+ * a binding license agreement with Ping Identity Corporation.
  *
- * You can obtain a copy of the License at legal/CDDLv1.0.txt. See the License for the
- * specific language governing permission and limitations under the License.
- *
- * When distributing Covered Software, include this CDDL Header Notice in each file and include
- * the License file at legal/CDDLv1.0.txt. If applicable, add the following below the CDDL
- * Header, with the fields enclosed by brackets [] replaced by your own identifying
- * information: "Portions copyright [year] [name of copyright owner]".
- *
- * Copyright 2017-2022 ForgeRock AS.
+ * Copyright 2024 Ping Identity Corporation. All Rights Reserved
  *
 -->
 
@@ -20,12 +12,12 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>p1verify</artifactId>
+    <artifactId>TNTPPingOneVerify</artifactId>
 
     <groupId>org.forgerock.am.tn</groupId>
-    <version>0.0.1</version>
-    <name>PingOne Verify Node</name>
-    <description>TBD</description>
+    <version>0.0.61</version>
+    <name>PingOne Verify Nodes</name>
+    <description>Nodes for PingOne Verify Integration</description>
 
 
 
@@ -78,8 +70,20 @@
             <artifactId>identity-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        
-
+        <dependency>
+            <groupId>org.forgerock.am</groupId>
+            <artifactId>service-config-api</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.forgerock.openam.auth.service.marketplace</groupId>
+            <artifactId>TNTPPingOneService</artifactId>
+            <version>0.0.20</version>
+        </dependency>
+        <dependency>
+            <groupId>org.forgerock.am</groupId>
+            <artifactId>openam-oauth2</artifactId>
+        </dependency>
     </dependencies>
     <repositories>
         <repository>
@@ -89,6 +93,14 @@
             <id>forgerock-private-releases</id>
             <name>ForgeRock Private Release Repository</name>
             <url>https://maven.forgerock.org/repo/private-releases</url>
+        </repository>
+	<repository>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <id>forgerock-internal-releases</id>
+            <name>ForgeRock Internal Release Repository</name>
+            <url>https://maven.forgerock.org/artifactory/internal-releases</url>
         </repository>
     </repositories>
 
