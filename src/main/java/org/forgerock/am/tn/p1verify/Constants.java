@@ -84,6 +84,7 @@ public class Constants {
 	protected final static String VerifedFailedReason = "VerifedFailedReason";
 	protected final static String VerifyMetadataResult = "VerifyMetadataResult";
 	protected final static String VerifyClaimResult = "VerifyClaimResult";
+	protected final static String VerifyAT = "VerifyAT";
 	
 	
 	protected final static String telephoneNumber = "telephoneNumber";

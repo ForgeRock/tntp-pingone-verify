@@ -439,6 +439,13 @@ public class Proofing implements Node {
 				successRetVal = Action.goTo(Constants.FAIL).build();
 			}
 
+			//save AccessToken?
+			if(config.tsAccessToken()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				ns.putTransient(Constants.VerifyAT, accessToken);
+			}
+					
 			//cleanup SS
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
 			return successRetVal;
@@ -455,6 +462,11 @@ public class Proofing implements Node {
 			if (config.demoMode())
 				failRetVal = Action.goTo(Constants.SUCCESS).build();
 			//cleanup SS
+			
+			//message on why failed
+			JsonValue failedReason = response.get(Constants.transactionStatus).get("verificationStatus");
+			ns.putTransient(Constants.VerifedFailedReason, failedReason);
+			
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
 			return failRetVal;
 		}
