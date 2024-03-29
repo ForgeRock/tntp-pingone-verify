@@ -15,7 +15,7 @@
     <artifactId>TNTPPingOneVerify</artifactId>
 
     <groupId>org.forgerock.am.tn</groupId>
-    <version>0.0.62</version>
+    <version>0.0.63</version>
     <name>PingOne Verify Nodes</name>
     <description>Nodes for PingOne Verify Integration</description>
 
