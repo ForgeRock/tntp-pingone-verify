@@ -15,7 +15,7 @@
     <artifactId>TNTPPingOneVerify</artifactId>
 
     <groupId>org.forgerock.am.tn</groupId>
-    <version>0.0.61</version>
+    <version>0.0.62</version>
     <name>PingOne Verify Nodes</name>
     <description>Nodes for PingOne Verify Integration</description>
 
@@ -26,16 +26,7 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-	<forgerockDistMgmtReleasesUrl>https://maven.forgerock.org/artifactory/internal-releases</forgerockDistMgmtReleasesUrl>
     </properties>
-
-    <distributionManagement>
-        <repository>
-            <id>forgerock-internal-releases</id>
-            <name>ForgeRock Internal Release Repository</name>
-            <url>https://maven.forgerock.org/artifactory/internal-releases</url>
-        </repository>
-    </distributionManagement>
 
     <build>
         <plugins>
@@ -88,6 +79,8 @@
             <groupId>org.forgerock.openam.auth.service.marketplace</groupId>
             <artifactId>TNTPPingOneService</artifactId>
             <version>0.0.20</version>
+            <scope>system</scope>
+            <systemPath>/Users/justin.chin/git/tntp-ping-service/target/TNTPPingOneService-0.0.20.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>org.forgerock.am</groupId>
@@ -102,14 +95,6 @@
             <id>forgerock-private-releases</id>
             <name>ForgeRock Private Release Repository</name>
             <url>https://maven.forgerock.org/repo/private-releases</url>
-        </repository>
-	<repository>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-            <id>forgerock-internal-releases</id>
-            <name>ForgeRock Internal Release Repository</name>
-            <url>https://maven.forgerock.org/artifactory/internal-releases</url>
         </repository>
     </repositories>
 
