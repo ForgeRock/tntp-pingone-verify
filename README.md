@@ -18,8 +18,8 @@ user verification. These verifications include:
 Identity Cloud provides the following artifacts to enable the PingOne Verify Nodes:
 
 * [PingOne service](https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep?tab=readme-ov-file#ping-one-service)
-* [PingOne Verify Authentication node](https://github.com/ForgeRock/tntp-pingone-verify/blob/final-marcin-mods/README.md#pingone-verify-node)
-* [PingOne Verify Proofing node](http://todo)
+* [PingOne Verify Authentication node](hhttps://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/Authentication/Readme.md)
+* [PingOne Verify Proofing node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/Proofing/Readme.md)
 
 You must set up the following before using the PingOne Verify node:
 
