@@ -6,14 +6,14 @@
 
 # PingOne Verify Nodes
 
-The PingOne Verify node utilizes the PingOne Verify service to enable four different types of secure
+The PingOne Verify nodes utilizes the PingOne Verify service to enable four different types of secure
 user verification. These verifications include:
 * [Government ID](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
 * [Facial Comparison Government ID](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
 * [Facial Comparison Reference Selfie](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
 * [Liveness](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
 
-> At this time, no other PingOne Verification is supported by this node.
+> At this time, no other PingOne Verification is supported by these nodes.
 
 Identity Cloud provides the following artifacts to enable the PingOne Verify Nodes:
 
@@ -21,7 +21,7 @@ Identity Cloud provides the following artifacts to enable the PingOne Verify Nod
 * [PingOne Verify Authentication node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/Authentication/Readme.md)
 * [PingOne Verify Proofing node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/Proofing/Readme.md)
 
-You must set up the following before using the PingOne Verify node:
+You must set up the following before using the PingOne Verify nodes:
 
 * [Create a verify policy](https://docs.pingidentity.com/r/en-us/pingone/pingone_creating_verify_policy)
 * [Create a worker application](https://docs.pingidentity.com/r/en-us/pingone/p1_add_app_worker)

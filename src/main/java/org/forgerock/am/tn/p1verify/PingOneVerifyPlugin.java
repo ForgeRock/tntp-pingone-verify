@@ -52,7 +52,7 @@ import com.google.common.collect.ImmutableMap;
  */
 public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "0.0.63";
+	static private String currentVersion = "0.0.64";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
 	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyPlugin.class);
 	private String loggerPrefix = "[PingOneVerifyPlugin]" + PingOneVerifyPlugin.logAppender;
@@ -67,8 +67,8 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
 		return new ImmutableMap.Builder<String, Iterable<? extends Class<? extends Node>>>()
                 .put(currentVersion, asList(  
-                						Authentication.class,
-                						Proofing.class))
+                						PingOneVerifyAuthentication.class,
+                						PingOneVerifyProofing.class))
                 .build();
 	}
 
@@ -109,8 +109,8 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 		logger.error(loggerPrefix + "fromVersion = " + fromVersion);
 		logger.error(loggerPrefix + "currentVersion = " + currentVersion);
 		try {
-			pluginTools.upgradeAuthNode(Authentication.class);
-			pluginTools.upgradeAuthNode(Proofing.class);
+			pluginTools.upgradeAuthNode(PingOneVerifyAuthentication.class);
+			pluginTools.upgradeAuthNode(PingOneVerifyProofing.class);
 		} catch (Exception e) {
 			throw new PluginException(e.getMessage());
 		}

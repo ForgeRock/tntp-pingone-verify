@@ -42,20 +42,20 @@ import com.google.inject.assistedinject.Assisted;
 
 
 @Node.Metadata(
-		outcomeProvider = Authentication.AuthenticationOutcomeProvider.class, 
-		configClass = Authentication.Config.class, 
+		outcomeProvider = PingOneVerifyAuthentication.AuthenticationOutcomeProvider.class, 
+		configClass = PingOneVerifyAuthentication.Config.class, 
 		tags = {"marketplace", "trustnetwork" })
-public class Authentication implements Node {
+public class PingOneVerifyAuthentication implements Node {
 
 	private final Config config;
 	private final Realm realm;
 	private TNTPPingOneConfig tntpPingOneConfig;
 	private final CoreWrapper coreWrapper;
 	
-	private final Logger logger = LoggerFactory.getLogger(Authentication.class);
+	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyAuthentication.class);
 	private final String loggerPrefix = "[PingOne Verify Authentication Node]" + PingOneVerifyPlugin.logAppender;
 	
-	public static final String BUNDLE = Authentication.class.getName();
+	public static final String BUNDLE = PingOneVerifyAuthentication.class.getName();
 	private final Helper client;
 	
 	
@@ -120,7 +120,7 @@ public class Authentication implements Node {
 	}
 
 	@Inject
-	public Authentication(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
+	public PingOneVerifyAuthentication(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
 		this.coreWrapper = coreWrapper;
 		this.config = config;
 		this.realm = realm;
@@ -310,7 +310,7 @@ public class Authentication implements Node {
 	public static class AuthenticationOutcomeProvider implements OutcomeProvider {
 		@Override
 		public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
-			ResourceBundle bundle = locales.getBundleInPreferredLocale(Authentication.BUNDLE, OutcomeProvider.class.getClassLoader());
+			ResourceBundle bundle = locales.getBundleInPreferredLocale(PingOneVerifyAuthentication.BUNDLE, OutcomeProvider.class.getClassLoader());
 			List<Outcome> results = new ArrayList<>();
 			results.add(new Outcome(Constants.SUCCESS, bundle.getString("successOutcome")));
 			results.add(new Outcome(Constants.SUCCESSPATCH, bundle.getString("successOutcomePatch")));

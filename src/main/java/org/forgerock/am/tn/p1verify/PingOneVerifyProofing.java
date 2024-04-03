@@ -53,20 +53,20 @@ import com.google.inject.assistedinject.Assisted;
 
 
 @Node.Metadata(
-		outcomeProvider = Proofing.ProofingOutcomeProvider.class, 
-		configClass = Proofing.Config.class, 
+		outcomeProvider = PingOneVerifyProofing.ProofingOutcomeProvider.class, 
+		configClass = PingOneVerifyProofing.Config.class, 
 		tags = {"marketplace", "trustnetwork" })
-public class Proofing implements Node {
+public class PingOneVerifyProofing implements Node {
 
 	private final Config config;
 	private final Realm realm;
 	private TNTPPingOneConfig tntpPingOneConfig;
 	private final CoreWrapper coreWrapper;
 	
-	private final Logger logger = LoggerFactory.getLogger(Proofing.class);
+	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyProofing.class);
 	private final String loggerPrefix = "[PingOne Verify Proofing Node]" + PingOneVerifyPlugin.logAppender;
 	
-	public static final String BUNDLE = Proofing.class.getName();
+	public static final String BUNDLE = PingOneVerifyProofing.class.getName();
 	private final Helper client;
 
 	/**
@@ -205,7 +205,7 @@ public class Proofing implements Node {
 	 * @param realm  The realm the node is in.
 	 */
 	@Inject
-	public Proofing(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
+	public PingOneVerifyProofing(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
 		this.coreWrapper = coreWrapper;
 		this.config = config;
 		this.realm = realm;
@@ -669,7 +669,7 @@ public class Proofing implements Node {
 	public static class ProofingOutcomeProvider implements OutcomeProvider {
 		@Override
 		public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
-			ResourceBundle bundle = locales.getBundleInPreferredLocale(Proofing.BUNDLE,
+			ResourceBundle bundle = locales.getBundleInPreferredLocale(PingOneVerifyProofing.BUNDLE,
 					OutcomeProvider.class.getClassLoader());
 			List<Outcome> results = new ArrayList<>();
 			results.add(new Outcome(Constants.SUCCESS, bundle.getString("successOutcome")));
