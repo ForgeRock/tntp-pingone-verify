@@ -34,14 +34,14 @@ functionality in a Journey.  This is done by using a stored picture compared to 
 
 ## Inputs
 
-This node retrieves from the shared state:
+This node retrieves from the journey state:
 * **The UserName**
 
-Additionally, the node first looks in the shared state for the following data:
+Additionally, the node first looks in the journey state for the following data:
 * **Attribute containing the PingOne UserID:**  the existing PingOne User GUID
 * **Reference Picture Attribute:** that contains a Base64-encoded reference self-image. Image must be JPEG format.
 
-If that information is not found in the shared state, the node will lookup the user in the local datastore to retrieve
+If that information is not found in the journey state, the node will lookup the user in the local datastore to retrieve
 the PingOne UserID and reference picture.
 
 If the PingOne UserID does not exist in the local datastore, or does not exist in the PingOne datastore, a new user is
