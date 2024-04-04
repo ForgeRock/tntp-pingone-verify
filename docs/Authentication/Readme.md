@@ -57,11 +57,19 @@ created in PingOne to perform the Verify facial-biometric authentication.
 
   <tr>
     <td>PingOne Service</td>
-    <td>Service for PingOne, PingOne DaVinci API, PingOne Protect *, and PingOne Verify Nodes</td>
+      <td>Service for PingOne, PingOne DaVinci API, PingOne Protect nodes, and PingOne Verify nodes
+      </td>
   </tr>
   <tr>
     <td>PingOne Verify Policy ID</td>
-    <td>PingOne Verify Policy ID to use.  The policy is expected to have Facial Comparison set to <b>Required</b></td>
+    <td>PingOne Verify Policy ID to use.  The policy is expected to have the following details set:<br>
+
+    - Facial Comparison set to REQUIRED
+    - ID Verification set to DISABLED
+    - Liveness set to REQUIRED
+
+</td>
+
   </tr>
   <tr>
     <td>Verify URL delivery mode</td>
