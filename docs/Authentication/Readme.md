@@ -64,9 +64,9 @@ created in PingOne to perform the Verify facial-biometric authentication.
     <td>PingOne Verify Policy ID</td>
     <td>PingOne Verify Policy ID to use.  The policy is expected to have the following details set:<br>
 
-    - Facial Comparison set to REQUIRED
-    - ID Verification set to DISABLED
-    - Liveness set to REQUIRED
+- ID Verification set to DISABLED
+- Facial Comparison set to REQUIRED
+- Liveness set to REQUIRED
 
 </td>
 
