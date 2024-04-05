@@ -139,8 +139,11 @@ public class Helper {
 		ns.remove(Constants.VerifyAuthnChoice);
 		ns.remove(Constants.VerifyAuthnInit);
 		ns.remove(Constants.VerifyUsersChoice);
-		if(!needTID)
-			ns.remove(Constants.VerifyTransactionID);	
+		if(needTID) {
+			String tid = ns.get(Constants.VerifyTransactionID).asString();
+			ns.remove(Constants.VerifyTransactionID);
+			ns.putTransient(Constants.VerifyTransactionID, tid);
+		}
 		ns.remove(Constants.VerifyDS);
 		ns.remove(Constants.VerifyProofID);
 	}

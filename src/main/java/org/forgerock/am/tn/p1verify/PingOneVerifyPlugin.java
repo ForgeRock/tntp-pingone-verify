@@ -52,7 +52,7 @@ import com.google.common.collect.ImmutableMap;
  */
 public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "0.0.65";
+	static private String currentVersion = "0.0.66";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
 	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyPlugin.class);
 	private String loggerPrefix = "[PingOneVerifyPlugin]" + PingOneVerifyPlugin.logAppender;
