@@ -148,30 +148,43 @@ created in PingOne to perform the Verification.
 ## Outputs
 
 <ul>
-<li>Created UserID</li>
-<li>Verified Claims</li>
-<li>Verification metadata</li>
-<li>Access Token</li>
-<li>TransactionID</li>
+<li>VerifyNeedPatch - The new PingOne User's GUID</li>
+<li>VerifyClaimResult - Verified Claims</li>
+<li>VerifyMetadataResult - The Verification metadata</li>
+<li>VerifyAT - The Access Token used to perform the PingOne Verify</li>
+<li>VerifyTransactionID - The PingOne Verify Transation ID</li>
+<li>VerifyNeedPatch - The new PingOne GUID if a new PingOne user was created</li>
+<li>VerifedFailedReason - If a failure occurs, summary detail of reason</li>
 </ul>
 
 ## Outcomes
 
 `Success`
 
-Successfully registered user with PingOne
+All configured checks passed.
+
+`Success (Patch ID)`
+
+All configured checks passed.  Additionally, the Node needed to create a new
+PingOne user in PingOne to perform the Verification. This is because either the stored GUID on the local user was
+invalid or did exist. The Node stored the new users PingOne GUID in the shared state on the `PingOne UserID Attribute`
+key as well as on the objectAttribute so the GUID can be stored on the local users account and used for
+future verifications.
 
 `Fail`
 
-Registration with PingOne failed
+One of the configured checks failed.
+
+`Fail (Patch ID)`
+
+One of the configured checks failed.  Additionally, the Node needed to create a new PingOne
+user in PingOne to perform the Verification. This is because either the stored GUID on the local user was invalid or did
+exist. The Node stored the new users PingOne GUID in the shared state on the `PingOne UserID Attribute`
+key as well as on the objectAttribute so the GUID can be stored on the local users account and used for future
+verifications.
 
 `Error`
-
-There was an error within the Registration process
-
-`Age Fail`
-
-Age is below the Age threshold
+There was an error during the Authentication process
 
 ## Troubleshooting
 

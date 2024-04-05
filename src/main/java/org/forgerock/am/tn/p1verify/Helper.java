@@ -133,13 +133,14 @@ public class Helper {
 	}
 	
 	
-	protected static void cleanUpSS(NodeState ns, boolean needPatch) throws Exception {
+	protected static void cleanUpSS(NodeState ns, boolean needPatch, boolean needTID) throws Exception {
 		if (!needPatch)
 			ns.remove(Constants.VerifyNeedPatch);
 		ns.remove(Constants.VerifyAuthnChoice);
 		ns.remove(Constants.VerifyAuthnInit);
-		ns.remove(Constants.VerifyUsersChoice);	
-		ns.remove(Constants.VerifyTransactionID);	
+		ns.remove(Constants.VerifyUsersChoice);
+		if(!needTID)
+			ns.remove(Constants.VerifyTransactionID);	
 		ns.remove(Constants.VerifyDS);
 		ns.remove(Constants.VerifyProofID);
 	}

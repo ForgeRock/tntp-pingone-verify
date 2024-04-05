@@ -297,7 +297,7 @@ public class PingOneVerifyProofing implements Node {
 			
 			//first check if cancelled hit
 			if (Helper.cancelPushed(context, ns)) {
-				Helper.cleanUpSS(ns, false);
+				Helper.cleanUpSS(ns, false, false);
 				return Action.goTo(Constants.CANCEL).build();
 			}
 			
@@ -447,7 +447,7 @@ public class PingOneVerifyProofing implements Node {
 			}
 					
 			//cleanup SS
-			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
 			return successRetVal;
 			
 			//fail outcome
@@ -467,7 +467,7 @@ public class PingOneVerifyProofing implements Node {
 			JsonValue failedReason = response.get(Constants.transactionStatus).get("verificationStatus");
 			ns.putTransient(Constants.VerifedFailedReason, failedReason);
 			
-			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
 			return failRetVal;
 		}
 		/* if we're here, something went wrong */

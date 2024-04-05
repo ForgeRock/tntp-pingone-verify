@@ -213,7 +213,7 @@ public class PingOneVerifyAuthentication implements Node {
 			
 			//first check if cancelled hit
 			if (Helper.cancelPushed(context, ns)) {
-				Helper.cleanUpSS(ns, false);
+				Helper.cleanUpSS(ns, false, false);
 				return Action.goTo(Constants.CANCEL).build();
 			}
 			
@@ -285,7 +285,7 @@ public class PingOneVerifyAuthentication implements Node {
 			else
 				successRetVal = Action.goTo(Constants.SUCCESS).build();
 			//cleanup SS
-			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), false);
 			return successRetVal;
 			
 			//fail outcome
@@ -300,7 +300,7 @@ public class PingOneVerifyAuthentication implements Node {
 			if (config.demoMode())
 				failRetVal = Action.goTo(Constants.SUCCESS).build();
 			//cleanup SS
-			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch));
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), false);
 			return failRetVal;
 		}
 		/* if we're here, something went wrong */
