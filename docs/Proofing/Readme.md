@@ -168,7 +168,7 @@ All configured checks passed.
 All configured checks passed.  Additionally, the Node needed to create a new
 PingOne user in PingOne to perform the Verification. This is because either the stored GUID on the local user was
 invalid or did exist. The Node stored the new users PingOne GUID in the shared state on the `PingOne UserID Attribute`
-key as well as on the objectAttribute so the GUID can be stored on the local users account and used for
+key as well as on the objectAttribute so the GUID can be saved to the local users account and used for
 future verifications.
 
 `Fail`
@@ -180,7 +180,7 @@ One of the configured checks failed.
 One of the configured checks failed.  Additionally, the Node needed to create a new PingOne
 user in PingOne to perform the Verification. This is because either the stored GUID on the local user was invalid or did
 exist. The Node stored the new users PingOne GUID in the shared state on the `PingOne UserID Attribute`
-key as well as on the objectAttribute so the GUID can be stored on the local users account and used for future
+key as well as on the objectAttribute so the GUID can be saved to the local users account and used for future
 verifications.
 
 `Error`

@@ -129,7 +129,7 @@ Successfully authenticated the users store selfie and live selfie
 Successfully authenticated the users store selfie and live selfie.  Additionally, the Node needed to create a new
 PingOne user in PingOne to perform the Verification. This is because either the stored GUID on the local user was
 invalid or did exist. The Node stored the new users PingOne GUID in the shared state on the `Attribute containing the
-PingOne UserID`key as well as on the objectAttribute so the GUID can be stored on the local users account and used for
+PingOne UserID`key as well as on the objectAttribute so the GUID can be saved to the local users account and used for
 future Authentication verifications.
 
 `Fail`
@@ -141,7 +141,7 @@ Failed to authenticate the users store selfie and live selfie.
 Failed to authenticate the users store selfie and live selfie.  Additionally, the Node needed to create a new PingOne
 user in PingOne to perform the Verification. This is because either the stored GUID on the local user was invalid or did
 exist. The Node stored the new users PingOne GUID in the shared state on the `Attribute containing the PingOne UserID`
-key as well as on the objectAttribute so the GUID can be stored on the local users account and used for future
+key as well as on the objectAttribute so the GUID can be saved to the local users account and used for future
 Authentication verifications.
 
 `Error`
