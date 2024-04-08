@@ -48,7 +48,7 @@ import com.sun.identity.idm.AMIdentity;
 public class Helper {
 	private final Logger logger = LoggerFactory.getLogger(Helper.class);
 	private final String loggerPrefix = "[PingOne Verify Helper]" + PingOneVerifyPlugin.logAppender;
-	private AMIdentity identity = null;
+	//private AMIdentity identity = null;
 	private final HttpClientHandler handler;
 	
 	@Inject
@@ -159,37 +159,7 @@ public class Helper {
 		request.addHeaders(header);
 	}
 	
-	
-	
-	protected String getInfo(NodeState ns, String det, CoreWrapper coreWrapper, boolean onObjectAttribute) throws Exception{
-    	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
-    		JsonValue jv = ns.get(Constants.objectAttributes);
-    		if (jv.isDefined(det))
-    			return jv.get(det).asString();
-    	}
-    	else if (!onObjectAttribute && ns.isDefined(det)) {
-    		return ns.get(det).asString();
-    	}
-    	
-    	AMIdentity thisIdentity = getUser(ns, coreWrapper);
-        /* no identifier in sharedState, fetch from DS */
-        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
-        	return thisIdentity.getAttribute(det).iterator().next();
-        
-        return null;
-    }
-	
-	protected AMIdentity getUser(NodeState ns, CoreWrapper coreWrapper) throws Exception{
-		if (this.identity==null) {
-			String userName = ns.get(USERNAME).asString();
-			String realm = ns.get(REALM).asString();
-			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
-		}
-        return this.identity;
-	}
-	
-	protected String getPingUID(NodeState ns, TNTPPingOneConfig tntpPingOneConfig, Realm realm, String userIDAttribute, CoreWrapper coreWrapper, String uidAttrName) throws Exception{
-		String pingUID = getInfo(ns, userIDAttribute, coreWrapper, false);
+	protected String getPingUID(NodeState ns, TNTPPingOneConfig tntpPingOneConfig, Realm realm, String uidAttrName, String pingUID) throws Exception{
 		
         String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users";
         TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();

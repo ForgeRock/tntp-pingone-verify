@@ -8,6 +8,9 @@
 
 package org.forgerock.am.tn.p1verify;
 
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -39,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.inject.assistedinject.Assisted;
+import com.sun.identity.idm.AMIdentity;
 
 
 @Node.Metadata(
@@ -57,6 +61,7 @@ public class PingOneVerifyAuthentication implements Node {
 	
 	public static final String BUNDLE = PingOneVerifyAuthentication.class.getName();
 	private final Helper client;
+	private AMIdentity identity = null;
 	
 	
 	/**
@@ -163,25 +168,27 @@ public class PingOneVerifyAuthentication implements Node {
 				//perform init on choice
 				
 				//we need to get the selfie
-				String selfie = client.getInfo(ns, config.pictureAttribute(), coreWrapper, false);
+				String selfie = getInfo(ns, config.pictureAttribute(), coreWrapper, false);
 				
 				//we need to get the phone number, email or we gen a qr code
 				String phone = null;
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = client.getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
+					phone = getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
 					break;
 				case Constants.eMailNum:
-					email = client.getInfo(ns, Constants.mail, coreWrapper, true);
+					email = getInfo(ns, Constants.mail, coreWrapper, true);
 					break;
 				}
 				
 				JsonValue body = Helper.getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
 				
 				//need to get the user id
-				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper, config.userIdAttribute());
+				String pingUIDLocal = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), pingUIDLocal);
 				
+
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
@@ -232,7 +239,7 @@ public class PingOneVerifyAuthentication implements Node {
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
 			else {
 				
-				pingOneUID = client.getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				pingOneUID = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
 			}
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
@@ -306,6 +313,37 @@ public class PingOneVerifyAuthentication implements Node {
 		/* if we're here, something went wrong */
 		return Action.goTo(Constants.ERROR).build();
 	}
+	
+	
+	
+	private AMIdentity getUser(NodeState ns, CoreWrapper coreWrapper) throws Exception{
+		if (this.identity==null || 
+			!(identity.getName().equalsIgnoreCase(ns.get(USERNAME).asString()))) {
+			String userName = ns.get(USERNAME).asString();
+			String realm = ns.get(REALM).asString();
+			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+		}
+        return this.identity;
+	}
+	
+	
+	private String getInfo(NodeState ns, String det, CoreWrapper coreWrapper, boolean onObjectAttribute) throws Exception{
+    	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
+    		JsonValue jv = ns.get(Constants.objectAttributes);
+    		if (jv.isDefined(det))
+    			return jv.get(det).asString();
+    	}
+    	else if (!onObjectAttribute && ns.isDefined(det)) {
+    		return ns.get(det).asString();
+    	}
+    	
+    	AMIdentity thisIdentity = getUser(ns, coreWrapper);
+        /* no identifier in sharedState, fetch from DS */
+        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
+        	return thisIdentity.getAttribute(det).iterator().next();
+        
+        return null;
+    }
 	
 	public static class AuthenticationOutcomeProvider implements OutcomeProvider {
 		@Override

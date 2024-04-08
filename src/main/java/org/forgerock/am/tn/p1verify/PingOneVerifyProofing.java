@@ -8,6 +8,9 @@
 
 package org.forgerock.am.tn.p1verify;
 
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
+
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -50,6 +53,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.inject.assistedinject.Assisted;
+import com.sun.identity.idm.AMIdentity;
 
 
 @Node.Metadata(
@@ -68,7 +72,9 @@ public class PingOneVerifyProofing implements Node {
 	
 	public static final String BUNDLE = PingOneVerifyProofing.class.getName();
 	private final Helper client;
+	private AMIdentity identity = null;
 
+	
 	/**
 	 * Configuration for the node.
 	 */
@@ -251,17 +257,18 @@ public class PingOneVerifyProofing implements Node {
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = client.getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
+					phone = getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
 					break;
 				case Constants.eMailNum:
-					email = client.getInfo(ns, Constants.mail, coreWrapper, true);
+					email = getInfo(ns, Constants.mail, coreWrapper, true);
 					break;
 				}
 				
 				JsonValue body = getInitBody(config.verifyPolicyId(), phone, email, ns);
 				
 				//need to get the user id
-				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), coreWrapper, config.userIdAttribute());
+				String pingUIDLocal = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), pingUIDLocal);
 				
 				ns.putShared(Constants.VerifyProofID, pingUID);
 				
@@ -315,7 +322,7 @@ public class PingOneVerifyProofing implements Node {
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
 			else {
-				pingOneUID = client.getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				pingOneUID = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
 			}
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
@@ -361,7 +368,7 @@ public class PingOneVerifyProofing implements Node {
 			for(Iterator<String> i = keys.iterator(); i.hasNext();) {
 				String thisKey = i.next();
 				//get the value for the key from shared state or user
-				String thisVal = client.getInfo(ns, thisKey, coreWrapper, true);
+				String thisVal = getInfo(ns, thisKey, coreWrapper, true);
 				if (thisVal!=null) {
 					JsonValue value = new JsonValue(new LinkedHashMap<String, Object>(1));
 					value.put("value", thisVal);
@@ -577,7 +584,7 @@ public class PingOneVerifyProofing implements Node {
 					
 					switch(expectedConf) {
 					case "EXACT":
-						String expectedAttr = client.getInfo(ns, Helper.getFRVal(thisAttr), coreWrapper, true);
+						String expectedAttr = getInfo(ns, Helper.getFRVal(thisAttr), coreWrapper, true);
 						String claimAttr = claimData.get(Helper.getClaimVal(thisAttr)).asString();
 						if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
 							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
@@ -665,6 +672,37 @@ public class PingOneVerifyProofing implements Node {
         ns.putShared(Constants.VerifedFailedReason, "Age threshold - failed");
         return false;		
 	}
+	
+	
+	private AMIdentity getUser(NodeState ns, CoreWrapper coreWrapper) throws Exception{
+		if (this.identity==null || 
+			!(identity.getName().equalsIgnoreCase(ns.get(USERNAME).asString())) ||
+			!(identity.getRealm().equalsIgnoreCase(ns.get(REALM).asString()))) {
+			String userName = ns.get(USERNAME).asString();
+			String realm = ns.get(REALM).asString();
+			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+		}
+        return this.identity;
+	}
+	
+	
+	private String getInfo(NodeState ns, String det, CoreWrapper coreWrapper, boolean onObjectAttribute) throws Exception{
+    	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
+    		JsonValue jv = ns.get(Constants.objectAttributes);
+    		if (jv.isDefined(det))
+    			return jv.get(det).asString();
+    	}
+    	else if (!onObjectAttribute && ns.isDefined(det)) {
+    		return ns.get(det).asString();
+    	}
+    	
+    	AMIdentity thisIdentity = getUser(ns, coreWrapper);
+        /* no identifier in sharedState, fetch from DS */
+        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
+        	return thisIdentity.getAttribute(det).iterator().next();
+        
+        return null;
+    }
 	
 	public static class ProofingOutcomeProvider implements OutcomeProvider {
 		@Override
