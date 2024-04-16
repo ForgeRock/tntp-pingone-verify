@@ -21,6 +21,7 @@ import java.util.UUID;
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
+import javax.security.auth.callback.TextOutputCallback;
 
 import org.forgerock.json.JsonValue;
 import org.forgerock.oauth2.core.AccessToken;
@@ -122,6 +123,21 @@ public class PingOneVerifyAuthentication implements Node {
 			return false;
 		}
 
+		@Attribute(order = 1200)
+		default boolean saveMetadata() {
+			return false;
+		}
+
+		@Attribute(order = 1300)
+		default boolean tsAccessToken() {
+			return false;
+		}
+
+		@Attribute(order = 1400)
+		default boolean tsTransactionId() {
+			return false;
+		}
+
 	}
 
 	@Inject
@@ -203,7 +219,8 @@ public class PingOneVerifyAuthentication implements Node {
 				}
 				
 				String webVerCode = response.get(Constants.webVerificationCode).asString();
-				PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+				callbacks.add(new TextOutputCallback(TextOutputCallback.INFORMATION,  String.format(config.pollWaitMessage(), webVerCode)));
+				PollingWaitCallback pwc = new PollingWaitCallback("5000","");
 				callbacks.add(pwc);
 				Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
 				callbacks.add(Constants.confirmationCancelCallback);
@@ -248,7 +265,7 @@ public class PingOneVerifyAuthentication implements Node {
 			JsonValue response = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 			
 			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
-			return returnFinalStep(result, ns, response);
+			return returnFinalStep(result, ns, response, pingOneUID);
 			
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
@@ -259,7 +276,7 @@ public class PingOneVerifyAuthentication implements Node {
 		}
 	}
 	
-	private Action returnFinalStep(String result, NodeState ns, JsonValue response) throws Exception {
+	private Action returnFinalStep(String result, NodeState ns, JsonValue response, String pingOneUID) throws Exception {
 
 		switch (result) {
 		case Constants.REQUESTED:
@@ -274,7 +291,8 @@ public class PingOneVerifyAuthentication implements Node {
 			}
 
 			String webVerCode = response.get(Constants.webVerificationCode).asString();
-			PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+			callbacks.add(new TextOutputCallback(TextOutputCallback.INFORMATION,  String.format(config.pollWaitMessage(), webVerCode)));
+			PollingWaitCallback pwc = new PollingWaitCallback("5000","");
 			callbacks.add(pwc);
 			Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
 			callbacks.add(Constants.confirmationCancelCallback);
@@ -291,8 +309,31 @@ public class PingOneVerifyAuthentication implements Node {
 				successRetVal = Action.goTo(Constants.SUCCESSPATCH).build();
 			else
 				successRetVal = Action.goTo(Constants.SUCCESS).build();
+			
+			//if save metadata to transient state
+			if(config.saveMetadata()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				
+				String txID = ns.get(Constants.VerifyTransactionID).asString();
+				
+				String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + txID + "/metaData";
+
+				JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+				ns.putTransient(Constants.VerifyMetadataResult, metadata);
+				
+			}
+			
 			//cleanup SS
-			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), false);
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
+			
+			//save AccessToken?
+			if(config.tsAccessToken()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				ns.putTransient(Constants.VerifyAT, accessToken);
+			}
+			
 			return successRetVal;
 			
 			//fail outcome
@@ -306,8 +347,31 @@ public class PingOneVerifyAuthentication implements Node {
 			//if demo mode, then send to success
 			if (config.demoMode())
 				failRetVal = Action.goTo(Constants.SUCCESS).build();
+			
+			//if save metadata to transient state
+			if(config.saveMetadata()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				
+				String txID = ns.get(Constants.VerifyTransactionID).asString();
+				
+				String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + txID + "/metaData";
+
+				JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+				ns.putTransient(Constants.VerifyMetadataResult, metadata);
+				
+			}
+
 			//cleanup SS
-			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), false);
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
+			
+			//save AccessToken?
+			if(config.tsAccessToken()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				ns.putTransient(Constants.VerifyAT, accessToken);
+			}
+			
 			return failRetVal;
 		}
 		/* if we're here, something went wrong */
