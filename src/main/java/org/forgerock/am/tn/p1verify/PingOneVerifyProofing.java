@@ -719,9 +719,20 @@ public class PingOneVerifyProofing implements Node {
 	private String getInfo(String det, TreeContext context, boolean onObjectAttribute) throws Exception{
 		NodeState ns = context.getStateFor(this);
     	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
-    		JsonValue jv = ns.get(Constants.objectAttributes);
-    		if (jv.isDefined(det))
-    			return jv.get(det).asString();
+    		
+    		JsonValue objectAttributesTS = context.getTransientState(Constants.objectAttributes);
+    		JsonValue objectAttributesSecured = context.getSecureState(Constants.objectAttributes);
+    		JsonValue objectAttributes = context.sharedState.get(Constants.objectAttributes);
+    		
+    		if(objectAttributesTS!=null && objectAttributesTS.isNotNull() && objectAttributesTS.isDefined(det)) {
+    			return objectAttributesTS.get(det).asString();
+    		}
+    		else if(objectAttributesSecured!=null && objectAttributesSecured.isNotNull() && objectAttributesSecured.isDefined(det)) {
+    			return objectAttributesSecured.get(det).asString();
+    		}
+    		else if(objectAttributes!=null && objectAttributes.isNotNull() && objectAttributes.isDefined(det)) {
+    			return objectAttributes.get(det).asString();
+    		}
     	}
     	else if (!onObjectAttribute && ns.isDefined(det)) {
     		return ns.get(det).asString();
