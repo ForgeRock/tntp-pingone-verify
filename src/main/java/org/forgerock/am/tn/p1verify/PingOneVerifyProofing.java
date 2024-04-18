@@ -690,9 +690,12 @@ public class PingOneVerifyProofing implements Node {
 	private Optional<JsonValue> getUser(TreeContext context, String detail) throws Exception {
 		
 		if (idmIntegrationService.isEnabled()) {
+			
+			Optional<String> identity = IdmIntegrationHelper.stringAttribute(IdmIntegrationHelper.getUsernameFromContext(idmIntegrationService, context));
+			
 			Optional<JsonValue> user = IdmIntegrationHelper.getObject(idmIntegrationService, realm,
-					context.request.locales, context.identityResource, USERNAME, Optional.of(context.getStateFor(this).get(USERNAME).asString()),
-					USERNAME, detail);
+					context.request.locales, context.identityResource, "userName", identity, USERNAME, detail);
+		
 			return user;
 		} else {
 			if (this.identity==null || 
@@ -734,7 +737,8 @@ public class PingOneVerifyProofing implements Node {
         	if (theInfo.get().isString())
         		return theInfo.get().asString();
         	else if (theInfo.get().isMap() && theInfo.get().iterator().hasNext())
-        		return theInfo.get().iterator().next().asString();
+        		return theInfo.get().get(det).asString();
+        		//return theInfo.get().iterator().next().asString();
         }
         
         return null;

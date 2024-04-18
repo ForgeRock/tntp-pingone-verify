@@ -14,7 +14,9 @@ import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.UUID;
 
@@ -31,6 +33,7 @@ import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.auth.node.api.NodeState;
 import org.forgerock.openam.auth.node.api.OutcomeProvider;
 import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.nodes.helpers.IdmIntegrationHelper;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValues;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
@@ -38,6 +41,7 @@ import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.http.HttpConstants;
+import org.forgerock.openam.integration.idm.IdmIntegrationService;
 import org.forgerock.util.i18n.PreferredLocales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +67,7 @@ public class PingOneVerifyAuthentication implements Node {
 	public static final String BUNDLE = PingOneVerifyAuthentication.class.getName();
 	private final Helper client;
 	private AMIdentity identity = null;
+	private final IdmIntegrationService idmIntegrationService;
 	
 	
 	/**
@@ -141,12 +146,13 @@ public class PingOneVerifyAuthentication implements Node {
 	}
 
 	@Inject
-	public PingOneVerifyAuthentication(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
+	public PingOneVerifyAuthentication(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client, IdmIntegrationService idmIntegrationService) {
 		this.coreWrapper = coreWrapper;
 		this.config = config;
 		this.realm = realm;
 		this.tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(config.tntpPingOneConfigName());
 		this.client = client;
+		this.idmIntegrationService = idmIntegrationService;
 	}
 
 	@Override
@@ -184,24 +190,24 @@ public class PingOneVerifyAuthentication implements Node {
 				//perform init on choice
 				
 				//we need to get the selfie
-				String selfie = getInfo(ns, config.pictureAttribute(), coreWrapper, false);
+				String selfie = getInfo(config.pictureAttribute(), context, false);
 				
 				//we need to get the phone number, email or we gen a qr code
 				String phone = null;
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
+					phone = getInfo(Constants.telephoneNumber, context, true);
 					break;
 				case Constants.eMailNum:
-					email = getInfo(ns, Constants.mail, coreWrapper, true);
+					email = getInfo(Constants.mail, context, true);
 					break;
 				}
 				
 				JsonValue body = Helper.getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
 				
 				//need to get the user id
-				String pingUIDLocal = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				String pingUIDLocal = getInfo(config.userIdAttribute(), context, false);
 				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), pingUIDLocal);
 				
 
@@ -256,7 +262,7 @@ public class PingOneVerifyAuthentication implements Node {
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
 			else {
 				
-				pingOneUID = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				pingOneUID = getInfo(config.userIdAttribute(), context, false);
 			}
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
@@ -380,18 +386,37 @@ public class PingOneVerifyAuthentication implements Node {
 	
 	
 	
-	private AMIdentity getUser(NodeState ns, CoreWrapper coreWrapper) throws Exception{
-		if (this.identity==null || 
-			!(identity.getName().equalsIgnoreCase(ns.get(USERNAME).asString()))) {
-			String userName = ns.get(USERNAME).asString();
-			String realm = ns.get(REALM).asString();
-			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+	private Optional<JsonValue> getUser(TreeContext context, String detail) throws Exception {
+		
+		if (idmIntegrationService.isEnabled()) {
+			
+			Optional<String> identity = IdmIntegrationHelper.stringAttribute(IdmIntegrationHelper.getUsernameFromContext(idmIntegrationService, context));
+			
+			Optional<JsonValue> user = IdmIntegrationHelper.getObject(idmIntegrationService, realm,
+					context.request.locales, context.identityResource, "userName", identity, USERNAME, detail);
+		
+			return user;
+		} else {
+			if (this.identity==null || 
+					!(identity.getName().equalsIgnoreCase(context.getStateFor(this).get(USERNAME).asString())) ||
+					!(identity.getRealm().equalsIgnoreCase(context.getStateFor(this).get(REALM).asString()))) {
+					String userName = context.getStateFor(this).get(USERNAME).asString();
+					String realm = context.getStateFor(this).get(REALM).asString();
+					this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+			}
+
+			
+			JsonValue jv = new JsonValue(new LinkedHashMap<String, Object>(1));
+			if (this.identity.getAttribute(detail)!=null && !this.identity.getAttribute(detail).isEmpty()) {
+				jv.add(detail, this.identity.getAttribute(detail).iterator().next());
+			}			
+			return Optional.ofNullable(jv);
 		}
-        return this.identity;
 	}
 	
 	
-	private String getInfo(NodeState ns, String det, CoreWrapper coreWrapper, boolean onObjectAttribute) throws Exception{
+	private String getInfo(String det, TreeContext context, boolean onObjectAttribute) throws Exception{
+		NodeState ns = context.getStateFor(this);
     	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
     		JsonValue jv = ns.get(Constants.objectAttributes);
     		if (jv.isDefined(det))
@@ -401,10 +426,20 @@ public class PingOneVerifyAuthentication implements Node {
     		return ns.get(det).asString();
     	}
     	
-    	AMIdentity thisIdentity = getUser(ns, coreWrapper);
+    	//AMIdentity thisIdentity = getUser(ns);
+    	
+    	Optional<JsonValue> theInfo = getUser(context, det);
+    	
         /* no identifier in sharedState, fetch from DS */
-        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
-        	return thisIdentity.getAttribute(det).iterator().next();
+        if (theInfo != null && theInfo.isPresent()) {
+        	
+        	if (theInfo.get().isString())
+        		return theInfo.get().asString();
+        	else if (theInfo.get().isMap() && theInfo.get().iterator().hasNext()) {
+        		return theInfo.get().get(det).asString();
+        		//return theInfo.get().iterator().next().asString();
+        	}
+        }
         
         return null;
     }
