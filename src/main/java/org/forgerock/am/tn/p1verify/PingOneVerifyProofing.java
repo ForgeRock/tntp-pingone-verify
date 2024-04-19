@@ -23,6 +23,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.UUID;
@@ -30,6 +31,7 @@ import java.util.UUID;
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
+import javax.security.auth.callback.TextOutputCallback;
 
 import org.forgerock.json.JsonValue;
 import org.forgerock.oauth2.core.AccessToken;
@@ -39,6 +41,7 @@ import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.auth.node.api.NodeState;
 import org.forgerock.openam.auth.node.api.OutcomeProvider;
 import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.nodes.helpers.IdmIntegrationHelper;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValues;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
@@ -46,6 +49,7 @@ import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.http.HttpConstants;
+import org.forgerock.openam.integration.idm.IdmIntegrationService;
 import org.forgerock.util.i18n.PreferredLocales;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -73,6 +77,7 @@ public class PingOneVerifyProofing implements Node {
 	public static final String BUNDLE = PingOneVerifyProofing.class.getName();
 	private final Helper client;
 	private AMIdentity identity = null;
+	private final IdmIntegrationService idmIntegrationService;
 
 	
 	/**
@@ -211,12 +216,13 @@ public class PingOneVerifyProofing implements Node {
 	 * @param realm  The realm the node is in.
 	 */
 	@Inject
-	public PingOneVerifyProofing(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
+	public PingOneVerifyProofing(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client, IdmIntegrationService idmIntegrationService) {
 		this.coreWrapper = coreWrapper;
 		this.config = config;
 		this.realm = realm;
 		this.tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(config.tntpPingOneConfigName());
 		this.client = client;
+		this.idmIntegrationService = idmIntegrationService;
 	}
 
 	@Override
@@ -257,17 +263,17 @@ public class PingOneVerifyProofing implements Node {
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
+					phone = getInfo(Constants.telephoneNumber, context, true);
 					break;
 				case Constants.eMailNum:
-					email = getInfo(ns, Constants.mail, coreWrapper, true);
+					email = getInfo(Constants.mail, context, true);
 					break;
 				}
 				
-				JsonValue body = getInitBody(config.verifyPolicyId(), phone, email, ns);
+				JsonValue body = getInitBody(config.verifyPolicyId(), phone, email, context);
 				
 				//need to get the user id
-				String pingUIDLocal = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				String pingUIDLocal = getInfo(config.userIdAttribute(), context, false);
 				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), pingUIDLocal);
 				
 				ns.putShared(Constants.VerifyProofID, pingUID);
@@ -286,7 +292,8 @@ public class PingOneVerifyProofing implements Node {
 				}
 				
 				String webVerCode = response.get(Constants.webVerificationCode).asString();
-				PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+				callbacks.add(new TextOutputCallback(TextOutputCallback.INFORMATION,  String.format(config.pollWaitMessage(), webVerCode)));
+				PollingWaitCallback pwc = new PollingWaitCallback("5000","");
 				callbacks.add(pwc);
 				Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
 				callbacks.add(Constants.confirmationCancelCallback);
@@ -322,7 +329,7 @@ public class PingOneVerifyProofing implements Node {
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
 			else {
-				pingOneUID = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				pingOneUID = getInfo(config.userIdAttribute(), context, false);
 			}
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
@@ -331,7 +338,7 @@ public class PingOneVerifyProofing implements Node {
 			JsonValue response = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 			
 			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
-			return returnFinalStep(result, ns, response);
+			return returnFinalStep(result, context, response);
 			
 
 		} catch (Exception ex) {
@@ -344,7 +351,7 @@ public class PingOneVerifyProofing implements Node {
 	}
 	
 	
-	private JsonValue getInitBody(String policyId, String telephoneNumber, String emailAddress, NodeState ns) throws Exception{
+	private JsonValue getInitBody(String policyId, String telephoneNumber, String emailAddress, TreeContext context) throws Exception{
 		
 		JsonValue body = new JsonValue(new LinkedHashMap<String, Object>(1));
 		
@@ -368,7 +375,7 @@ public class PingOneVerifyProofing implements Node {
 			for(Iterator<String> i = keys.iterator(); i.hasNext();) {
 				String thisKey = i.next();
 				//get the value for the key from shared state or user
-				String thisVal = getInfo(ns, thisKey, coreWrapper, true);
+				String thisVal = getInfo(thisKey, context, true);
 				if (thisVal!=null) {
 					JsonValue value = new JsonValue(new LinkedHashMap<String, Object>(1));
 					value.put("value", thisVal);
@@ -387,8 +394,9 @@ public class PingOneVerifyProofing implements Node {
 	}
 	
 	
-	private Action returnFinalStep(String result, NodeState ns, JsonValue response) throws Exception {
-
+	private Action returnFinalStep(String result, TreeContext context, JsonValue response) throws Exception {
+		NodeState ns = context.getStateFor(this);
+		
 		switch (result) {
 		case Constants.REQUESTED:
 		case Constants.PARTIAL:
@@ -402,7 +410,8 @@ public class PingOneVerifyProofing implements Node {
 			}
 
 			String webVerCode = response.get(Constants.webVerificationCode).asString();
-			PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+			callbacks.add(new TextOutputCallback(TextOutputCallback.INFORMATION,  String.format(config.pollWaitMessage(), webVerCode)));
+			PollingWaitCallback pwc = new PollingWaitCallback("5000","");
 			callbacks.add(pwc);
 			Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
 			callbacks.add(Constants.confirmationCancelCallback);
@@ -424,7 +433,7 @@ public class PingOneVerifyProofing implements Node {
 			JsonValue userData = retrieveUserData(ns);
 			
 			//ensure map complete
-			mapClaims(ns, userData);
+			mapClaims(context, userData);
 			
 			//gov ID check
 			if (!govIDCheckPass(ns, userData)) {
@@ -442,7 +451,7 @@ public class PingOneVerifyProofing implements Node {
 			}
 			
 			//fuzzy matching check
-			else if (!fuzzyMatchCheck(ns, userData)) {
+			else if (!fuzzyMatchCheck(context, userData)) {
 				successRetVal = Action.goTo(Constants.FAIL).build();
 			}
 
@@ -538,8 +547,8 @@ public class PingOneVerifyProofing implements Node {
 		return retVal;
 	}
 
-	private boolean fuzzyMatchCheck(NodeState ns, JsonValue claimData) throws Exception{
-		
+	private boolean fuzzyMatchCheck(TreeContext context, JsonValue claimData) throws Exception{
+		NodeState ns = context.getStateFor(this);
 		
 		Map<String, String> fuzzyMap = config.fuzzyMatchingConfiguration();
 		
@@ -584,7 +593,7 @@ public class PingOneVerifyProofing implements Node {
 					
 					switch(expectedConf) {
 					case "EXACT":
-						String expectedAttr = getInfo(ns, Helper.getFRVal(thisAttr), coreWrapper, true);
+						String expectedAttr = getInfo(Helper.getFRVal(thisAttr), context, true);
 						String claimAttr = claimData.get(Helper.getClaimVal(thisAttr)).asString();
 						if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
 							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
@@ -637,11 +646,15 @@ public class PingOneVerifyProofing implements Node {
 	}
 	
 	
-	private void mapClaims(NodeState ns, JsonValue returnedClaims) throws Exception{
+	private void mapClaims(TreeContext context, JsonValue returnedClaims) throws Exception{
 		
         JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
         JSONArray keys = attributeMap.names();
-        JsonValue objectAttributes = ns.get("objectAttributes");
+        
+        if (keys==null || keys.isEmpty())
+        	return;
+        
+        JsonValue objectAttributes = context.sharedState.get("objectAttributes");
         
         if (objectAttributes==null || objectAttributes.isNull()) {
         	objectAttributes = new JsonValue(new LinkedHashMap<String, Object>(1));
@@ -654,6 +667,7 @@ public class PingOneVerifyProofing implements Node {
             	objectAttributes.put(key, returnedClaims.get(value).getObject());
             }
         }
+        NodeState ns = context.getStateFor(this);
         ns.putShared("objectAttributes",objectAttributes);
 	}
 	
@@ -671,35 +685,72 @@ public class PingOneVerifyProofing implements Node {
         }
         ns.putShared(Constants.VerifedFailedReason, "Age threshold - failed");
         return false;		
-	}
+	}	
 	
-	
-	private AMIdentity getUser(NodeState ns, CoreWrapper coreWrapper) throws Exception{
-		if (this.identity==null || 
-			!(identity.getName().equalsIgnoreCase(ns.get(USERNAME).asString())) ||
-			!(identity.getRealm().equalsIgnoreCase(ns.get(REALM).asString()))) {
-			String userName = ns.get(USERNAME).asString();
-			String realm = ns.get(REALM).asString();
-			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+	private Optional<JsonValue> getUser(TreeContext context, String detail) throws Exception {
+		
+		if (idmIntegrationService.isEnabled()) {
+			
+			Optional<String> identity = IdmIntegrationHelper.stringAttribute(IdmIntegrationHelper.getUsernameFromContext(idmIntegrationService, context));
+			
+			Optional<JsonValue> user = IdmIntegrationHelper.getObject(idmIntegrationService, realm,
+					context.request.locales, context.identityResource, "userName", identity, USERNAME, detail);
+		
+			return user;
+		} else {
+			if (this.identity==null || 
+					!(identity.getName().equalsIgnoreCase(context.getStateFor(this).get(USERNAME).asString())) ||
+					!(identity.getRealm().equalsIgnoreCase(context.getStateFor(this).get(REALM).asString()))) {
+					String userName = context.getStateFor(this).get(USERNAME).asString();
+					String realm = context.getStateFor(this).get(REALM).asString();
+					this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+			}
+
+			
+			JsonValue jv = new JsonValue(new LinkedHashMap<String, Object>(1));
+			if (this.identity.getAttribute(detail)!=null && !this.identity.getAttribute(detail).isEmpty()) {
+				jv.add(detail, this.identity.getAttribute(detail).iterator().next());
+			}			
+			return Optional.ofNullable(jv);
 		}
-        return this.identity;
 	}
 	
 	
-	private String getInfo(NodeState ns, String det, CoreWrapper coreWrapper, boolean onObjectAttribute) throws Exception{
+	private String getInfo(String det, TreeContext context, boolean onObjectAttribute) throws Exception{
+		NodeState ns = context.getStateFor(this);
     	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
-    		JsonValue jv = ns.get(Constants.objectAttributes);
-    		if (jv.isDefined(det))
-    			return jv.get(det).asString();
+    		
+    		JsonValue objectAttributesTS = context.getTransientState(Constants.objectAttributes);
+    		JsonValue objectAttributesSecured = context.getSecureState(Constants.objectAttributes);
+    		JsonValue objectAttributes = context.sharedState.get(Constants.objectAttributes);
+    		
+    		if(objectAttributesTS!=null && objectAttributesTS.isNotNull() && objectAttributesTS.isDefined(det)) {
+    			return objectAttributesTS.get(det).asString();
+    		}
+    		else if(objectAttributesSecured!=null && objectAttributesSecured.isNotNull() && objectAttributesSecured.isDefined(det)) {
+    			return objectAttributesSecured.get(det).asString();
+    		}
+    		else if(objectAttributes!=null && objectAttributes.isNotNull() && objectAttributes.isDefined(det)) {
+    			return objectAttributes.get(det).asString();
+    		}
     	}
     	else if (!onObjectAttribute && ns.isDefined(det)) {
     		return ns.get(det).asString();
     	}
     	
-    	AMIdentity thisIdentity = getUser(ns, coreWrapper);
+    	//AMIdentity thisIdentity = getUser(ns);
+    	
+    	Optional<JsonValue> theInfo = getUser(context, det);
+    	
         /* no identifier in sharedState, fetch from DS */
-        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
-        	return thisIdentity.getAttribute(det).iterator().next();
+        if (theInfo != null && theInfo.isPresent()) {
+        	
+        	if (theInfo.get().isString())
+        		return theInfo.get().asString();
+        	else if (theInfo.get().isMap() && theInfo.get().iterator().hasNext())
+        		return theInfo.get().get(det).asString();
+        		//return theInfo.get().iterator().next().asString();
+        }
         
         return null;
     }

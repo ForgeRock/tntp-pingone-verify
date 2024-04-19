@@ -14,13 +14,16 @@ import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.UUID;
 
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
+import javax.security.auth.callback.TextOutputCallback;
 
 import org.forgerock.json.JsonValue;
 import org.forgerock.oauth2.core.AccessToken;
@@ -30,6 +33,7 @@ import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.auth.node.api.NodeState;
 import org.forgerock.openam.auth.node.api.OutcomeProvider;
 import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.nodes.helpers.IdmIntegrationHelper;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValues;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
@@ -37,6 +41,7 @@ import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.http.HttpConstants;
+import org.forgerock.openam.integration.idm.IdmIntegrationService;
 import org.forgerock.util.i18n.PreferredLocales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +67,7 @@ public class PingOneVerifyAuthentication implements Node {
 	public static final String BUNDLE = PingOneVerifyAuthentication.class.getName();
 	private final Helper client;
 	private AMIdentity identity = null;
+	private final IdmIntegrationService idmIntegrationService;
 	
 	
 	/**
@@ -122,15 +128,31 @@ public class PingOneVerifyAuthentication implements Node {
 			return false;
 		}
 
+		@Attribute(order = 1200)
+		default boolean saveMetadata() {
+			return false;
+		}
+
+		@Attribute(order = 1300)
+		default boolean tsAccessToken() {
+			return false;
+		}
+
+		@Attribute(order = 1400)
+		default boolean tsTransactionId() {
+			return false;
+		}
+
 	}
 
 	@Inject
-	public PingOneVerifyAuthentication(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client) {
+	public PingOneVerifyAuthentication(@Assisted Config config, @Assisted Realm realm, CoreWrapper coreWrapper, Helper client, IdmIntegrationService idmIntegrationService) {
 		this.coreWrapper = coreWrapper;
 		this.config = config;
 		this.realm = realm;
 		this.tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(config.tntpPingOneConfigName());
 		this.client = client;
+		this.idmIntegrationService = idmIntegrationService;
 	}
 
 	@Override
@@ -168,24 +190,24 @@ public class PingOneVerifyAuthentication implements Node {
 				//perform init on choice
 				
 				//we need to get the selfie
-				String selfie = getInfo(ns, config.pictureAttribute(), coreWrapper, false);
+				String selfie = getInfo(config.pictureAttribute(), context, false);
 				
 				//we need to get the phone number, email or we gen a qr code
 				String phone = null;
 				String email = null;
 				switch(userChoice) {
 				case Constants.SMSNum:
-					phone = getInfo(ns, Constants.telephoneNumber, coreWrapper, true);
+					phone = getInfo(Constants.telephoneNumber, context, true);
 					break;
 				case Constants.eMailNum:
-					email = getInfo(ns, Constants.mail, coreWrapper, true);
+					email = getInfo(Constants.mail, context, true);
 					break;
 				}
 				
 				JsonValue body = Helper.getInitializeBody(config.verifyPolicyId(), phone, email, selfie);
 				
 				//need to get the user id
-				String pingUIDLocal = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				String pingUIDLocal = getInfo(config.userIdAttribute(), context, false);
 				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), pingUIDLocal);
 				
 
@@ -203,7 +225,8 @@ public class PingOneVerifyAuthentication implements Node {
 				}
 				
 				String webVerCode = response.get(Constants.webVerificationCode).asString();
-				PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+				callbacks.add(new TextOutputCallback(TextOutputCallback.INFORMATION,  String.format(config.pollWaitMessage(), webVerCode)));
+				PollingWaitCallback pwc = new PollingWaitCallback("5000","");
 				callbacks.add(pwc);
 				Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
 				callbacks.add(Constants.confirmationCancelCallback);
@@ -239,7 +262,7 @@ public class PingOneVerifyAuthentication implements Node {
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
 			else {
 				
-				pingOneUID = getInfo(ns, config.userIdAttribute(), coreWrapper, false);
+				pingOneUID = getInfo(config.userIdAttribute(), context, false);
 			}
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
@@ -248,7 +271,7 @@ public class PingOneVerifyAuthentication implements Node {
 			JsonValue response = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 			
 			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
-			return returnFinalStep(result, ns, response);
+			return returnFinalStep(result, ns, response, pingOneUID);
 			
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
@@ -259,7 +282,7 @@ public class PingOneVerifyAuthentication implements Node {
 		}
 	}
 	
-	private Action returnFinalStep(String result, NodeState ns, JsonValue response) throws Exception {
+	private Action returnFinalStep(String result, NodeState ns, JsonValue response, String pingOneUID) throws Exception {
 
 		switch (result) {
 		case Constants.REQUESTED:
@@ -274,7 +297,8 @@ public class PingOneVerifyAuthentication implements Node {
 			}
 
 			String webVerCode = response.get(Constants.webVerificationCode).asString();
-			PollingWaitCallback pwc = new PollingWaitCallback("5000", String.format(config.pollWaitMessage(), webVerCode));
+			callbacks.add(new TextOutputCallback(TextOutputCallback.INFORMATION,  String.format(config.pollWaitMessage(), webVerCode)));
+			PollingWaitCallback pwc = new PollingWaitCallback("5000","");
 			callbacks.add(pwc);
 			Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
 			callbacks.add(Constants.confirmationCancelCallback);
@@ -291,8 +315,31 @@ public class PingOneVerifyAuthentication implements Node {
 				successRetVal = Action.goTo(Constants.SUCCESSPATCH).build();
 			else
 				successRetVal = Action.goTo(Constants.SUCCESS).build();
+			
+			//if save metadata to transient state
+			if(config.saveMetadata()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				
+				String txID = ns.get(Constants.VerifyTransactionID).asString();
+				
+				String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + txID + "/metaData";
+
+				JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+				ns.putTransient(Constants.VerifyMetadataResult, metadata);
+				
+			}
+			
 			//cleanup SS
-			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), false);
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
+			
+			//save AccessToken?
+			if(config.tsAccessToken()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				ns.putTransient(Constants.VerifyAT, accessToken);
+			}
+			
 			return successRetVal;
 			
 			//fail outcome
@@ -306,8 +353,31 @@ public class PingOneVerifyAuthentication implements Node {
 			//if demo mode, then send to success
 			if (config.demoMode())
 				failRetVal = Action.goTo(Constants.SUCCESS).build();
+			
+			//if save metadata to transient state
+			if(config.saveMetadata()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				
+				String txID = ns.get(Constants.VerifyTransactionID).asString();
+				
+				String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + txID + "/metaData";
+
+				JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+				ns.putTransient(Constants.VerifyMetadataResult, metadata);
+				
+			}
+
 			//cleanup SS
-			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), false);
+			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
+			
+			//save AccessToken?
+			if(config.tsAccessToken()) {
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				ns.putTransient(Constants.VerifyAT, accessToken);
+			}
+			
 			return failRetVal;
 		}
 		/* if we're here, something went wrong */
@@ -316,18 +386,37 @@ public class PingOneVerifyAuthentication implements Node {
 	
 	
 	
-	private AMIdentity getUser(NodeState ns, CoreWrapper coreWrapper) throws Exception{
-		if (this.identity==null || 
-			!(identity.getName().equalsIgnoreCase(ns.get(USERNAME).asString()))) {
-			String userName = ns.get(USERNAME).asString();
-			String realm = ns.get(REALM).asString();
-			this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+	private Optional<JsonValue> getUser(TreeContext context, String detail) throws Exception {
+		
+		if (idmIntegrationService.isEnabled()) {
+			
+			Optional<String> identity = IdmIntegrationHelper.stringAttribute(IdmIntegrationHelper.getUsernameFromContext(idmIntegrationService, context));
+			
+			Optional<JsonValue> user = IdmIntegrationHelper.getObject(idmIntegrationService, realm,
+					context.request.locales, context.identityResource, "userName", identity, USERNAME, detail);
+		
+			return user;
+		} else {
+			if (this.identity==null || 
+					!(identity.getName().equalsIgnoreCase(context.getStateFor(this).get(USERNAME).asString())) ||
+					!(identity.getRealm().equalsIgnoreCase(context.getStateFor(this).get(REALM).asString()))) {
+					String userName = context.getStateFor(this).get(USERNAME).asString();
+					String realm = context.getStateFor(this).get(REALM).asString();
+					this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
+			}
+
+			
+			JsonValue jv = new JsonValue(new LinkedHashMap<String, Object>(1));
+			if (this.identity.getAttribute(detail)!=null && !this.identity.getAttribute(detail).isEmpty()) {
+				jv.add(detail, this.identity.getAttribute(detail).iterator().next());
+			}			
+			return Optional.ofNullable(jv);
 		}
-        return this.identity;
 	}
 	
 	
-	private String getInfo(NodeState ns, String det, CoreWrapper coreWrapper, boolean onObjectAttribute) throws Exception{
+	private String getInfo(String det, TreeContext context, boolean onObjectAttribute) throws Exception{
+		NodeState ns = context.getStateFor(this);
     	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
     		JsonValue jv = ns.get(Constants.objectAttributes);
     		if (jv.isDefined(det))
@@ -337,10 +426,20 @@ public class PingOneVerifyAuthentication implements Node {
     		return ns.get(det).asString();
     	}
     	
-    	AMIdentity thisIdentity = getUser(ns, coreWrapper);
+    	//AMIdentity thisIdentity = getUser(ns);
+    	
+    	Optional<JsonValue> theInfo = getUser(context, det);
+    	
         /* no identifier in sharedState, fetch from DS */
-        if (thisIdentity != null && !thisIdentity.getAttribute(det).isEmpty())
-        	return thisIdentity.getAttribute(det).iterator().next();
+        if (theInfo != null && theInfo.isPresent()) {
+        	
+        	if (theInfo.get().isString())
+        		return theInfo.get().asString();
+        	else if (theInfo.get().isMap() && theInfo.get().iterator().hasNext()) {
+        		return theInfo.get().get(det).asString();
+        		//return theInfo.get().iterator().next().asString();
+        	}
+        }
         
         return null;
     }
