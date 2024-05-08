@@ -515,6 +515,10 @@ public class PingOneVerifyProofing implements Node {
 	//govID check
 	private boolean govIDCheckPass(NodeState ns, JsonValue claimData) throws Exception{
 		boolean retVal = false;
+		
+		if (config.govId().equals(Constants.GovId.ANY))
+			return true;
+		
 		String thisGovIDCheck = claimData.get("idType").toString();
 		
 		thisGovIDCheck = thisGovIDCheck.toLowerCase();
@@ -630,6 +634,9 @@ public class PingOneVerifyProofing implements Node {
 	}
 
 	private boolean expiredDocCheck(NodeState ns, JsonValue claimData) throws Exception{
+		if (!config.failExpired())
+			return true;
+		
 		String expirationDateClaim = claimData.get("expirationDate").asString();
 		
         String toParse = expirationDateClaim + " 00:00:01.000-00:00";
@@ -672,6 +679,8 @@ public class PingOneVerifyProofing implements Node {
 	}
 	
 	private boolean dobCheck(NodeState ns, JsonValue claimData) throws Exception{
+		if (config.dobVerification() == 0)
+			return true;
 		
 		String dobClaim = claimData.get("birthDate").asString();
 		
