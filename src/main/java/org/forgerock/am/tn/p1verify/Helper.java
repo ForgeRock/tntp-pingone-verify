@@ -80,7 +80,7 @@ public class Helper {
 		JsonValue createUidBody = new JsonValue(new LinkedHashMap<String, Object>(1));
 		createUidBody.put("username", UUID.randomUUID().toString());
 
-		AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+		String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 
 		JsonValue response = makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.POST, createUidBody);
 
@@ -93,7 +93,7 @@ public class Helper {
 		return retVal;
 	}
 
-	protected JsonValue makeHTTPClientCall(AccessToken accessToken, String theURI, String method, JsonValue body) throws Exception {
+	protected JsonValue makeHTTPClientCall(String accessToken, String theURI, String method, JsonValue body) throws Exception {
 		Request request = null;
 		try {
 			URI uri = URI.create(theURI);
@@ -152,9 +152,9 @@ public class Helper {
 		return new ScriptTextOutputCallback(GenerationUtils.getQRCodeGenerationJavascriptForAuthenticatorAppRegistration("callback_0", text));
 	}
 
-	protected static void addAuthorizationHeader(Request request, AccessToken accessToken) throws MalformedHeaderException {
+	protected static void addAuthorizationHeader(Request request, String accessToken) throws MalformedHeaderException {
 		AuthorizationHeader header = new AuthorizationHeader();
-		BearerToken bearerToken = new BearerToken(accessToken.getTokenId());
+		BearerToken bearerToken = new BearerToken(accessToken);
 		header.setRawValue(BearerToken.NAME + " " + bearerToken);
 		request.addHeaders(header);
 	}
@@ -178,7 +178,7 @@ public class Helper {
 		}
 		else {
 			//check it exists
-			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+			String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 			try {
 				JsonValue response = makeHTTPClientCall(accessToken, theURI + "/" + pingUID, HttpConstants.Methods.GET, null);
 				JsonValue theID = response.get("id");
@@ -203,7 +203,7 @@ public class Helper {
 		return pingUID;
 	}
 	
-	protected JsonValue init(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body, String userID) throws Exception {
+	protected JsonValue init(String accessToken, TNTPPingOneConfig worker, JsonValue body, String userID) throws Exception {
 		String theURI = Constants.endpoint + worker.environmentRegion().getDomainSuffix() + "/v1/environments/" + worker.environmentId() + "/users/" + userID + "/verifyTransactions";
 		return makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.POST, body);
 	}

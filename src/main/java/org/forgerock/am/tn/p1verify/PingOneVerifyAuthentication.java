@@ -212,7 +212,7 @@ public class PingOneVerifyAuthentication implements Node {
 				
 
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
 				JsonValue response = client.init(accessToken, tntpPingOneConfig, body, pingUID);
 				
@@ -267,7 +267,7 @@ public class PingOneVerifyAuthentication implements Node {
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
 			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+			String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 			JsonValue response = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 			
 			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
@@ -319,7 +319,7 @@ public class PingOneVerifyAuthentication implements Node {
 			//if save metadata to transient state
 			if(config.saveMetadata()) {
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
 				String txID = ns.get(Constants.VerifyTransactionID).asString();
 				
@@ -336,7 +336,7 @@ public class PingOneVerifyAuthentication implements Node {
 			//save AccessToken?
 			if(config.tsAccessToken()) {
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				ns.putTransient(Constants.VerifyAT, accessToken);
 			}
 			
@@ -357,7 +357,7 @@ public class PingOneVerifyAuthentication implements Node {
 			//if save metadata to transient state
 			if(config.saveMetadata()) {
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
 				String txID = ns.get(Constants.VerifyTransactionID).asString();
 				
@@ -374,7 +374,7 @@ public class PingOneVerifyAuthentication implements Node {
 			//save AccessToken?
 			if(config.tsAccessToken()) {
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				ns.putTransient(Constants.VerifyAT, accessToken);
 			}
 			
