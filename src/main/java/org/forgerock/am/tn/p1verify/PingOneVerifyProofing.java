@@ -279,7 +279,7 @@ public class PingOneVerifyProofing implements Node {
 				ns.putShared(Constants.VerifyProofID, pingUID);
 				
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
 				JsonValue response = client.init(accessToken, tntpPingOneConfig, body, pingUID);
 				
@@ -334,7 +334,7 @@ public class PingOneVerifyProofing implements Node {
 			
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
 			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-			AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+			String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 			JsonValue response = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 			
 			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
@@ -458,7 +458,7 @@ public class PingOneVerifyProofing implements Node {
 			//save AccessToken?
 			if(config.tsAccessToken()) {
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				ns.putTransient(Constants.VerifyAT, accessToken);
 			}
 					
@@ -500,7 +500,7 @@ public class PingOneVerifyProofing implements Node {
 		String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingUID + "/verifyTransactions/" + txID + "/verifiedData?type=GOVERNMENT_ID";
 		
 		TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-		AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+		String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 		
 		retVal = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 		
@@ -564,7 +564,7 @@ public class PingOneVerifyProofing implements Node {
 		                                                                                                                                                       
 		
 		TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-		AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+		String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 		
 		JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 		
