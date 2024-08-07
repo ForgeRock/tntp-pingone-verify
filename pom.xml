@@ -88,8 +88,6 @@
             <groupId>org.forgerock.openam.auth.service.marketplace</groupId>
             <artifactId>TNTPPingOneService</artifactId>
             <version>0.0.21</version>
-            <scope>system</scope>
-            <systemPath>/Users/peterholko/forgerock/github/aug6/tntp-pingone-verify/TNTPPingOneService-0.0.21.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>org.forgerock.am</groupId>
