@@ -34,7 +34,6 @@ import javax.security.auth.callback.ConfirmationCallback;
 import javax.security.auth.callback.TextOutputCallback;
 
 import org.forgerock.json.JsonValue;
-import org.forgerock.oauth2.core.AccessToken;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.Action;
 import org.forgerock.openam.auth.node.api.Node;
@@ -59,7 +58,6 @@ import org.slf4j.LoggerFactory;
 import com.google.inject.assistedinject.Assisted;
 import com.sun.identity.idm.AMIdentity;
 
-
 @Node.Metadata(
 		outcomeProvider = PingOneVerifyProofing.ProofingOutcomeProvider.class, 
 		configClass = PingOneVerifyProofing.Config.class, 
@@ -79,7 +77,6 @@ public class PingOneVerifyProofing implements Node {
 	private AMIdentity identity = null;
 	private final IdmIntegrationService idmIntegrationService;
 
-	
 	/**
 	 * Configuration for the node.
 	 */
@@ -165,6 +162,10 @@ public class PingOneVerifyProofing implements Node {
 			};
 		}
 
+		@Attribute(order = 1050)
+		default boolean skipNodeFuzzyMatch() {
+			return false;
+		}
 
 		@Attribute(order = 1100)
 		default boolean failExpired() {
@@ -232,33 +233,32 @@ public class PingOneVerifyProofing implements Node {
 				
 			NodeState ns = context.getStateFor(this);
 			
-			//check if choice exists
+			// check if choice exists
 			if (!ns.isDefined(Constants.VerifyAuthnChoice)) {
 				ns.putShared(Constants.VerifyAuthnChoice, UUID.randomUUID());
 				if  (config.userNotificationChoice()){
 					return Helper.getChoiceCallback(config.userNotificationChoiceMessage());
 				}				
 			}
-			
-			
-			//if we are here, we are ready to init on choice made, or pre-set for user
+
+			// if we are here, we are ready to init on choice made, or pre-set for user
 			if (!ns.isDefined(Constants.VerifyAuthnInit)){
-				//if here then the user choose, or the admin choose for them how to verify - SMS, EMAIL, or QR
+				// if here then the user choose, or the admin choose for them how to verify - SMS, EMAIL, or QR
 				ns.putShared(Constants.VerifyAuthnInit, UUID.randomUUID());
 				int userChoice = 0;
 				if (config.userNotificationChoice()) {
-					//get the users choice
+					// get the users choice
 					userChoice = context.getCallback(ConfirmationCallback.class).get().getSelectedIndex();
 				}
 				else {
-					//take the choice picked for them
+					// take the choice picked for them
 					userChoice = config.userNotification().getDeliveryMethod();
 				}
 				ns.putShared(Constants.VerifyUsersChoice, Integer.valueOf(userChoice));
 				
-				//perform init on choice
-								
-				//we need to get the phone number, email or we gen a qr code
+				// perform init on choice
+
+				// we need to get the phone number, email or we gen a qr code
 				String phone = null;
 				String email = null;
 				switch(userChoice) {
@@ -272,7 +272,7 @@ public class PingOneVerifyProofing implements Node {
 				
 				JsonValue body = getInitBody(config.verifyPolicyId(), phone, email, context);
 				
-				//need to get the user id
+				// need to get the user id
 				String pingUIDLocal = getInfo(config.userIdAttribute(), context, false);
 				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), pingUIDLocal);
 				
@@ -285,7 +285,7 @@ public class PingOneVerifyProofing implements Node {
 				
 				ns.putShared(Constants.VerifyTransactionID, response.get("id").asString());
 				List<Callback> callbacks = new ArrayList<>();
-				//if we need to get a QR code, add it now
+				// if we need to get a QR code, add it now
 				if (userChoice == Constants.QRNum) {
 					String webURL = response.get(Constants.webVerificationUrl).asString();
 					callbacks.add(Helper.generateQRCallback(webURL));
@@ -302,26 +302,23 @@ public class PingOneVerifyProofing implements Node {
 				ns.putShared(Constants.VerifyDS, now);
 				
 				return Action.send(callbacks).build();
-				
 			}
+
+			// if here, then the communication path has been decided, and init already happened.
+			// we are checking if done and result
 			
-			
-			//if here, then the communication path has been decided, and init already happened. 
-			//we are checking if done and result
-			
-			//first check if cancelled hit
+			// first check if cancelled hit
 			if (Helper.cancelPushed(context, ns)) {
 				Helper.cleanUpSS(ns, false, false);
 				return Action.goTo(Constants.CANCEL).build();
 			}
 			
-			//check if timeout reached
+			// check if timeout reached
 			long startTime = ns.get(Constants.VerifyDS).asLong();
 			long now = (new Date().getTime())/1000;			
 			if((now-config.timeOut()) >= startTime) {
 				throw new Exception("Submission timeout reached");
 			}
-			
 			
 			String transactionID = ns.get(Constants.VerifyTransactionID).asString();
 			String pingOneUID = null;
@@ -332,14 +329,16 @@ public class PingOneVerifyProofing implements Node {
 				pingOneUID = getInfo(config.userIdAttribute(), context, false);
 			}
 			
-			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID + "/verifyTransactions/" + transactionID;
+			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() +
+					"/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID +
+					"/verifyTransactions/" + transactionID;
 			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 			String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 			JsonValue response = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
-			
+
 			String result = response.get(Constants.transactionStatus).get(Constants.overallStatus).asString();
-			return returnFinalStep(result, context, response);
-			
+
+			return returnFinalStep(result, context, response, transactionID, pingOneUID, accessToken);
 
 		} catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
@@ -350,17 +349,16 @@ public class PingOneVerifyProofing implements Node {
 		}
 	}
 	
-	
 	private JsonValue getInitBody(String policyId, String telephoneNumber, String emailAddress, TreeContext context) throws Exception{
 		
 		JsonValue body = new JsonValue(new LinkedHashMap<String, Object>(1));
 		
-		//Verify Policy ID section
+		// Verify Policy ID section
 		JsonValue theID = new JsonValue(new LinkedHashMap<String, Object>(1));
 		theID.put("id", policyId);
 		body.put("verifyPolicy", theID);
 		
-		//sendNotification section
+		// sendNotification section
 		if ((telephoneNumber!=null && !telephoneNumber.isEmpty()) || (emailAddress!=null && !emailAddress.isEmpty())) {
 			JsonValue sendNotification = new JsonValue(new LinkedHashMap<String, Object>(1));
 			sendNotification.putIfNotNull("phone", telephoneNumber);
@@ -368,13 +366,13 @@ public class PingOneVerifyProofing implements Node {
 			body.put("sendNotification", sendNotification);
 		}
 		
-		//BIOGRAPHIC_MATCHER
+		// BIOGRAPHIC_MATCHER
 		if (config.fuzzyMatchingConfiguration() != null && !config.fuzzyMatchingConfiguration().isEmpty()) {
 			Set<String> keys = config.fuzzyMatchingConfiguration().keySet();
 			JsonValue thisJVKey = new JsonValue(new LinkedHashMap<String, Object>(1));
 			for(Iterator<String> i = keys.iterator(); i.hasNext();) {
 				String thisKey = i.next();
-				//get the value for the key from shared state or user
+				// get the value for the key from shared state or user
 				String thisVal = getInfo(thisKey, context, true);
 				if (thisVal!=null) {
 					JsonValue value = new JsonValue(new LinkedHashMap<String, Object>(1));
@@ -387,16 +385,14 @@ public class PingOneVerifyProofing implements Node {
 				}
 			}
 			body.put("requirements", thisJVKey);
-			
-			
 		}
 		return body;
 	}
-	
-	
-	private Action returnFinalStep(String result, TreeContext context, JsonValue response) throws Exception {
+
+	private Action returnFinalStep(String result, TreeContext context, JsonValue response,
+								   String transactionID, String pingOneUID, String accessToken) throws Exception {
 		NodeState ns = context.getStateFor(this);
-		
+
 		switch (result) {
 		case Constants.REQUESTED:
 		case Constants.PARTIAL:
@@ -418,7 +414,7 @@ public class PingOneVerifyProofing implements Node {
 
 			return Action.send(callbacks).build();
 			
-			//success outcomes
+			// success outcomes
 		case Constants.THESUCCESS:
 		case Constants.NOT_REQUIRED:
 		case Constants.APPROVED_NO_REQUEST:
@@ -429,57 +425,80 @@ public class PingOneVerifyProofing implements Node {
 			else
 				successRetVal = Action.goTo(Constants.SUCCESS).build();
 			
-			//retrieve verified data
+			// retrieve verified data
 			JsonValue userData = retrieveUserData(ns);
 			
-			//ensure map complete
+			// ensure map complete
 			mapClaims(context, userData);
-			
-			//gov ID check
-			if (!govIDCheckPass(ns, userData)) {
+
+			// Process gov ID check if gov ID dropdown does not equal ANY
+			if (!config.govId().equals(Constants.GovId.ANY)) {
+				if (!govIDCheckPass(ns, userData)) {
+					successRetVal = Action.goTo(Constants.FAIL).build();
+				}
+			}
+
+			// failed expired check
+			if (config.failExpired()) {
+				if (!expiredDocCheck(ns, userData)) {
+					successRetVal = Action.goTo(Constants.FAIL).build();
+				}
+			}
+
+			// age threshold check
+			if (!dobCheck(ns, userData)) {
 				successRetVal = Action.goTo(Constants.FAIL).build();
 			}
-				
-			//failed expired check
-			else if (!expiredDocCheck(ns, userData)) {
-				successRetVal = Action.goTo(Constants.FAIL).build();
-			}
 			
-			//age threshold check
-			else if (!dobCheck(ns, userData)) {
-				successRetVal = Action.goTo(Constants.FAIL).build();
-			}
-			
-			//fuzzy matching check
-			else if (!fuzzyMatchCheck(context, userData)) {
+			// fuzzy matching check
+			if (!fuzzyMatchCheck(context, userData, transactionID, pingOneUID, accessToken)) {
 				successRetVal = Action.goTo(Constants.FAIL).build();
 			}
 
-			//save AccessToken?
+			// save AccessToken?
 			if(config.tsAccessToken()) {
-				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				ns.putTransient(Constants.VerifyAT, accessToken);
 			}
 					
-			//cleanup SS
+			// cleanup SS
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
 			return successRetVal;
 			
-			//fail outcome
+			// fail outcome
 		case Constants.THEFAIL:
+			// save PingOne UID
+			ns.putShared(Constants.VerifyProofID, pingOneUID);
+
+			// save AccessToken?
+			if(config.tsAccessToken()) {
+				ns.putTransient(Constants.VerifyAT, accessToken);
+			}
+
+			// save metadata
+			if (config.saveMetadata()) {
+
+				// if here, we need to get the metadata
+				String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() +
+						"/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID +
+						"/verifyTransactions/" + transactionID + "/metaData";
+
+				JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
+
+				ns.putTransient(Constants.VerifyMetadataResult, metadata);
+			}
+
 			Action failRetVal = null;
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				failRetVal = Action.goTo(Constants.FAILPATCH).build();
 			else
 				failRetVal = Action.goTo(Constants.FAIL).build();
 			
-			//if demo mode, then send to success
+			// if demo mode, then send to success
 			if (config.demoMode())
 				failRetVal = Action.goTo(Constants.SUCCESS).build();
-			//cleanup SS
+			// cleanup SS
 			
-			//message on why failed
+			// message on why failed
 			JsonValue failedReason = response.get(Constants.transactionStatus).get("verificationStatus");
 			ns.putTransient(Constants.VerifedFailedReason, failedReason);
 			
@@ -489,8 +508,8 @@ public class PingOneVerifyProofing implements Node {
 		/* if we're here, something went wrong */
 		return Action.goTo(Constants.ERROR).build();
 	}
-	
 
+	// fetch user data
 	private JsonValue retrieveUserData(NodeState ns) throws Exception{
 		JsonValue retVal = null;
 		
@@ -512,7 +531,7 @@ public class PingOneVerifyProofing implements Node {
 		return retVal;
 	}
 	
-	//govID check
+	// govID check
 	private boolean govIDCheckPass(NodeState ns, JsonValue claimData) throws Exception{
 		boolean retVal = false;
 		String thisGovIDCheck = claimData.get("idType").toString();
@@ -547,89 +566,86 @@ public class PingOneVerifyProofing implements Node {
 		return retVal;
 	}
 
-	private boolean fuzzyMatchCheck(TreeContext context, JsonValue claimData) throws Exception{
+	// run a fuzzy match check against attribute confidence map
+	private boolean fuzzyMatchCheck(TreeContext context, JsonValue claimData,
+									String transactionID, String pingOneUID, String accessToken) throws Exception{
 		NodeState ns = context.getStateFor(this);
 		
 		Map<String, String> fuzzyMap = config.fuzzyMatchingConfiguration();
 		
-		//if nothing in fuzzy mapping, and we don't need to save the metadata - return true
+		// if nothing in fuzzy mapping, and we don't need to save the metadata - return true
 		if ((fuzzyMap==null || fuzzyMap.isEmpty()) && !config.saveMetadata())
 			return true;
 		
-		//if here, we need to get the metadata
-		String pingUID = ns.get(Constants.VerifyProofID).asString();
-		String txID = ns.get(Constants.VerifyTransactionID).asString();
-		
-		String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingUID + "/verifyTransactions/" + txID + "/metaData";
-		                                                                                                                                                       
-		
-		TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-		String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+		String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() +
+				"/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID +
+				"/verifyTransactions/" + transactionID + "/metaData";
 		
 		JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
-		
-		//save metadata
+
+		// save metadata
 		if (config.saveMetadata()) {
 			ns.putTransient(Constants.VerifyMetadataResult, metadata);
 			
-			//if nothing in fuzzy mapping - return true
+			// if nothing in fuzzy mapping - return true
 			if (fuzzyMap==null || fuzzyMap.isEmpty())
 				return true;
 		}
-		
-		//if here, we need to compare the biographic_match_results
-		for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext();) {
-			JsonValue thisOne = i.next();
-			if (thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
-				//last check do the levels match?  If exact, compare manually  
-				for(Iterator<JsonValue> innerIt = thisOne.get("data").get("biographic_match_results").iterator(); innerIt.hasNext();) {
-					JsonValue thisInnerOne = innerIt.next();
-					//Identifier can be different for onprem vs cloud TODO
-					String thisAttr = thisInnerOne.get("identifier").asString();
-					String thisConf = thisInnerOne.get("match").asString();
-					
-					String expectedConf = fuzzyMap.get(Helper.getFRVal(thisAttr));
-					
-					
-					switch(expectedConf) {
-					case "EXACT":
-						String expectedAttr = getInfo(Helper.getFRVal(thisAttr), context, true);
-						String claimAttr = claimData.get(Helper.getClaimVal(thisAttr)).asString();
-						if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
-							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-							return false;
+
+		// run the fuzzy check if skipNodeFuzzyMatch is true, otherwise skip the check
+		if (!config.skipNodeFuzzyMatch()) {
+			// if here, we need to compare the biographic_match_results
+			for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext(); ) {
+				JsonValue thisOne = i.next();
+				if (thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
+					// last check do the levels match?  If exact, compare manually
+					for (Iterator<JsonValue> innerIt = thisOne.get("data").get("biographic_match_results").iterator(); innerIt.hasNext(); ) {
+						JsonValue thisInnerOne = innerIt.next();
+						// Identifier can be different for onprem vs cloud TODO
+						String thisAttr = thisInnerOne.get("identifier").asString();
+						String thisConf = thisInnerOne.get("match").asString();
+
+						String expectedConf = fuzzyMap.get(Helper.getFRVal(thisAttr));
+
+						switch (expectedConf) {
+							case "EXACT":
+								String expectedAttr = getInfo(Helper.getFRVal(thisAttr), context, true);
+								String claimAttr = claimData.get(Helper.getClaimVal(thisAttr)).asString();
+								if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
+									ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+									return false;
+								}
+								break;
+							case "HIGH":
+								if (!thisConf.equalsIgnoreCase("HIGH")) {
+									ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+									return false;
+								}
+								break;
+							case "MEDIUM":
+								if (thisConf.equalsIgnoreCase("LOW") || thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
+									ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+									return false;
+								}
+								break;
+							case "LOW":
+								if (thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
+									ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+									return false;
+								}
+								break;
 						}
-						break;
-					case "HIGH":
-						if (!thisConf.equalsIgnoreCase("HIGH")) {
-							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-							return false;
-						}
-						break;
-					case "MEDIUM":
-						if (thisConf.equalsIgnoreCase("LOW") || thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
-							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-							return false;
-						}
-						break;
-					case "LOW":
-						if (thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
-							ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-							return false;
-						}
-						break;						
 					}
+					return true;
 				}
-				return true;
 			}
+			ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+			return false;
 		}
-		
-		ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-		return false;
-//TODO lots of testing
+		return true;
 	}
 
-	private boolean expiredDocCheck(NodeState ns, JsonValue claimData) throws Exception{
+	private boolean expiredDocCheck(NodeState ns, JsonValue claimData) throws Exception {
 		String expirationDateClaim = claimData.get("expirationDate").asString();
 		
         String toParse = expirationDateClaim + " 00:00:01.000-00:00";
@@ -646,7 +662,7 @@ public class PingOneVerifyProofing implements Node {
 	}
 	
 	
-	private void mapClaims(TreeContext context, JsonValue returnedClaims) throws Exception{
+	private void mapClaims(TreeContext context, JsonValue returnedClaims) throws Exception {
 		
         JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
         JSONArray keys = attributeMap.names();
@@ -671,7 +687,7 @@ public class PingOneVerifyProofing implements Node {
         ns.putShared("objectAttributes",objectAttributes);
 	}
 	
-	private boolean dobCheck(NodeState ns, JsonValue claimData) throws Exception{
+	private boolean dobCheck(NodeState ns, JsonValue claimData) throws Exception {
 		
 		String dobClaim = claimData.get("birthDate").asString();
 		
@@ -716,7 +732,7 @@ public class PingOneVerifyProofing implements Node {
 	}
 	
 	
-	private String getInfo(String det, TreeContext context, boolean onObjectAttribute) throws Exception{
+	private String getInfo(String det, TreeContext context, boolean onObjectAttribute) throws Exception {
 		NodeState ns = context.getStateFor(this);
     	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
     		
@@ -738,7 +754,7 @@ public class PingOneVerifyProofing implements Node {
     		return ns.get(det).asString();
     	}
     	
-    	//AMIdentity thisIdentity = getUser(ns);
+    	// AMIdentity thisIdentity = getUser(ns);
     	
     	Optional<JsonValue> theInfo = getUser(context, det);
     	
@@ -749,7 +765,7 @@ public class PingOneVerifyProofing implements Node {
         		return theInfo.get().asString();
         	else if (theInfo.get().isMap() && theInfo.get().iterator().hasNext())
         		return theInfo.get().get(det).asString();
-        		//return theInfo.get().iterator().next().asString();
+        		// return theInfo.get().iterator().next().asString();
         }
         
         return null;
