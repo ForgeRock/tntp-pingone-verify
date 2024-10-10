@@ -162,11 +162,6 @@ public class PingOneVerifyProofing implements Node {
 			};
 		}
 
-		@Attribute(order = 1050)
-		default boolean skipNodeFuzzyMatch() {
-			return false;
-		}
-
 		@Attribute(order = 1100)
 		default boolean failExpired() {
 			return false;
@@ -592,57 +587,53 @@ public class PingOneVerifyProofing implements Node {
 				return true;
 		}
 
-		// run the fuzzy check if skipNodeFuzzyMatch is true, otherwise skip the check
-		if (!config.skipNodeFuzzyMatch()) {
-			// if here, we need to compare the biographic_match_results
-			for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext(); ) {
-				JsonValue thisOne = i.next();
-				if (thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
-					// last check do the levels match?  If exact, compare manually
-					for (Iterator<JsonValue> innerIt = thisOne.get("data").get("biographic_match_results").iterator(); innerIt.hasNext(); ) {
-						JsonValue thisInnerOne = innerIt.next();
-						// Identifier can be different for onprem vs cloud TODO
-						String thisAttr = thisInnerOne.get("identifier").asString();
-						String thisConf = thisInnerOne.get("match").asString();
+		// if here, we need to compare the biographic_match_results
+		for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext(); ) {
+			JsonValue thisOne = i.next();
+			if (thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
+				// last check do the levels match?  If exact, compare manually
+				for (Iterator<JsonValue> innerIt = thisOne.get("data").get("biographic_match_results").iterator(); innerIt.hasNext(); ) {
+					JsonValue thisInnerOne = innerIt.next();
+					// Identifier can be different for onprem vs cloud TODO
+					String thisAttr = thisInnerOne.get("identifier").asString();
+					String thisConf = thisInnerOne.get("match").asString();
 
-						String expectedConf = fuzzyMap.get(Helper.getFRVal(thisAttr));
+					String expectedConf = fuzzyMap.get(Helper.getFRVal(thisAttr));
 
-						switch (expectedConf) {
-							case "EXACT":
-								String expectedAttr = getInfo(Helper.getFRVal(thisAttr), context, true);
-								String claimAttr = claimData.get(Helper.getClaimVal(thisAttr)).asString();
-								if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
-									ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-									return false;
-								}
-								break;
-							case "HIGH":
-								if (!thisConf.equalsIgnoreCase("HIGH")) {
-									ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-									return false;
-								}
-								break;
-							case "MEDIUM":
-								if (thisConf.equalsIgnoreCase("LOW") || thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
-									ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-									return false;
-								}
-								break;
-							case "LOW":
-								if (thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
-									ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-									return false;
-								}
-								break;
-						}
+					switch (expectedConf) {
+						case "EXACT":
+							String expectedAttr = getInfo(Helper.getFRVal(thisAttr), context, true);
+							String claimAttr = claimData.get(Helper.getClaimVal(thisAttr)).asString();
+							if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
+								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+								return false;
+							}
+							break;
+						case "HIGH":
+							if (!thisConf.equalsIgnoreCase("HIGH")) {
+								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+								return false;
+							}
+							break;
+						case "MEDIUM":
+							if (thisConf.equalsIgnoreCase("LOW") || thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
+								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+								return false;
+							}
+							break;
+						case "LOW":
+							if (thisConf.equalsIgnoreCase("NOT_APPLICABLE")) {
+								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+								return false;
+							}
+							break;
 					}
-					return true;
 				}
+				return true;
 			}
-			ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
-			return false;
 		}
-		return true;
+		ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+		return false;
 	}
 
 	private boolean expiredDocCheck(NodeState ns, JsonValue claimData) throws Exception {
