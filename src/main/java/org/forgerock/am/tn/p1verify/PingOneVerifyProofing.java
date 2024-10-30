@@ -8,9 +8,11 @@
 
 package org.forgerock.am.tn.p1verify;
 
+import static org.forgerock.am.tn.p1verify.Constants.PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
+import java.net.URISyntaxException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -33,13 +35,12 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 import javax.security.auth.callback.TextOutputCallback;
 
+import com.sun.identity.authentication.spi.RedirectCallback;
 import org.forgerock.json.JsonValue;
+import org.forgerock.http.MutableUri;
+import org.forgerock.http.protocol.Form;
 import org.forgerock.openam.annotations.sm.Attribute;
-import org.forgerock.openam.auth.node.api.Action;
-import org.forgerock.openam.auth.node.api.Node;
-import org.forgerock.openam.auth.node.api.NodeState;
-import org.forgerock.openam.auth.node.api.OutcomeProvider;
-import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.node.api.*;
 import org.forgerock.openam.auth.nodes.helpers.IdmIntegrationHelper;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValues;
@@ -176,6 +177,11 @@ public class PingOneVerifyProofing implements Node {
 		default String pollWaitMessage() {
 			return "Waiting for completion.  Here is the code you will see on your device: %s";
 		}
+
+		@Attribute(order = 1350)
+		default String redirectMessage() {
+			return "Redirecting back to PingOne AIC.";
+		}
 		
 		@Attribute(order = 1400)
 		default boolean saveVerifiedClaims() {
@@ -253,7 +259,7 @@ public class PingOneVerifyProofing implements Node {
 				
 				// perform init on choice
 
-				// we need to get the phone number, email or we gen a qr code
+				// we need to get the phone number, email, or generate a qr code
 				String phone = null;
 				String email = null;
 				switch(userChoice) {
@@ -266,7 +272,16 @@ public class PingOneVerifyProofing implements Node {
 				}
 				
 				JsonValue body = getInitBody(config.verifyPolicyId(), phone, email, context);
-				
+
+				// Setting PingOne Verify redirect callback url
+				if (userChoice == Constants.redirectNum) {
+					JsonValue redirect = new JsonValue(new LinkedHashMap<String, Object>(1));
+					String redirectUri = getRedirectUri(context);
+					redirect.put("url", redirectUri);
+					redirect.put("message", config.redirectMessage());
+					body.put("redirect", redirect);
+				}
+
 				// need to get the user id
 				String pingUIDLocal = getInfo(config.userIdAttribute(), context, false);
 				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), pingUIDLocal);
@@ -277,26 +292,53 @@ public class PingOneVerifyProofing implements Node {
 				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				
 				JsonValue response = client.init(accessToken, tntpPingOneConfig, body, pingUID);
-				
+				String webURL = response.get(Constants.webVerificationUrl).asString();
+				String webVerCode = response.get(Constants.webVerificationCode).asString();
+				long now = (new Date().getTime())/1000;
+
+				// Setting shared state for redirect callback and polling callback
 				ns.putShared(Constants.VerifyTransactionID, response.get("id").asString());
+				ns.putShared(Constants.VerifyDS, now);
+
+				// building list of callbacks
 				List<Callback> callbacks = new ArrayList<>();
 				// if we need to get a QR code, add it now
 				if (userChoice == Constants.QRNum) {
-					String webURL = response.get(Constants.webVerificationUrl).asString();
 					callbacks.add(Helper.generateQRCallback(webURL));
+				} else if (userChoice == Constants.redirectNum) {
+					// Building and executing the redirect URL
+					RedirectCallback redirectCallback = new RedirectCallback(
+							webURL + "&dt=1",
+							null,
+							"GET"
+					);
+					redirectCallback.setTrackingCookie(true);
+					return Action.send(redirectCallback).build();
 				}
-				
-				String webVerCode = response.get(Constants.webVerificationCode).asString();
+
 				callbacks.add(new TextOutputCallback(TextOutputCallback.INFORMATION,  String.format(config.pollWaitMessage(), webVerCode)));
 				PollingWaitCallback pwc = new PollingWaitCallback("5000","");
 				callbacks.add(pwc);
 				Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
 				callbacks.add(Constants.confirmationCancelCallback);
 				
-				long now = (new Date().getTime())/1000;
-				ns.putShared(Constants.VerifyDS, now);
-				
 				return Action.send(callbacks).build();
+			}
+
+			// Check if it should handle a redirect flow
+			if (ns.isDefined(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY)) {
+				logger.debug("Handling redirect flow.");
+				if (context.request.parameters.containsKey("code")) {
+					String code = context.request.parameters.get("code").get(0);
+					if (code.equals(ns.get(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY).asString())) {
+						logger.debug("Code found in request, completing the Identity Verification process.");
+						ns.remove(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY);
+					} else {
+						throw new Exception("Redirect code mismatch");
+					}
+				} else {
+					throw new Exception("Redirect code missing");
+				}
 			}
 
 			// if here, then the communication path has been decided, and init already happened.
@@ -343,11 +385,39 @@ public class PingOneVerifyProofing implements Node {
 			return Action.goTo(Constants.ERROR).build();
 		}
 	}
+
+	String getRedirectUri(TreeContext context) throws NodeProcessException {
+		// Get server URL
+		String serverUrl = context.request.serverUrl;
+
+		// Get query parameters and add code
+		Map<String, List<String>> requestQueryParameters = context.request.parameters;
+		Form redirectQuery = new Form();
+		redirectQuery.putAll(requestQueryParameters);
+
+		NodeState nodeState = context.getStateFor(this);
+		String code = UUID.randomUUID().toString();
+		nodeState.putShared(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY, code);
+		redirectQuery.put("code", Collections.singletonList(code));
+
+		// Create resume URI
+		MutableUri resumeUri;
+		try {
+			resumeUri = new MutableUri(serverUrl);
+			resumeUri.setPath(resumeUri.getPath());
+			resumeUri.setRawQuery(redirectQuery.toQueryString());
+		} catch (URISyntaxException e) {
+			throw new NodeProcessException(String.format("Failed to create Tree resume URI for server '%s'", serverUrl));
+		}
+
+		return resumeUri.toASCIIString();
+	}
 	
 	private JsonValue getInitBody(String policyId, String telephoneNumber, String emailAddress, TreeContext context) throws Exception{
 		
 		JsonValue body = new JsonValue(new LinkedHashMap<String, Object>(1));
-		
+
+
 		// Verify Policy ID section
 		JsonValue theID = new JsonValue(new LinkedHashMap<String, Object>(1));
 		theID.put("id", policyId);
