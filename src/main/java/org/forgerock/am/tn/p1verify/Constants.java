@@ -90,9 +90,8 @@ public class Constants {
 	protected final static String telephoneNumber = "telephoneNumber";
 	protected final static String mail = "mail";
 	protected final static String objectAttributes = "objectAttributes";
-	
-	
-	
+
+	public static final String PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY = "pingOneVerifyRedirectFlowCode";
 	
 	protected final static String webVerificationUrl = "webVerificationUrl";
 	protected final static String webVerificationCode = "webVerificationCode";
@@ -121,14 +120,17 @@ public class Constants {
 	protected final static String QR = "QR";
 	protected final static String SMS = "SMS";
 	protected final static String eMail = "eMail";
+	protected final static String REDIRECT = "REDIRECT";
 	protected final static int QRNum = 0;
 	protected final static int SMSNum = 1;
 	protected final static int eMailNum = 2;
+	protected final static int redirectNum = 3;
 	
 	protected enum UserNotification {
 		QR(Constants.QR), 
 		SMS(Constants.SMS), 
-		EMAIL(Constants.eMail);
+		EMAIL(Constants.eMail),
+		REDIRECT(Constants.REDIRECT);
 		
 		private final String val;
 		
@@ -142,8 +144,10 @@ public class Constants {
 				return Constants.QRNum;
 			 else if (val.equalsIgnoreCase(Constants.SMS)) 
 				return Constants.SMSNum;
-			 else
+			 else if (val.equalsIgnoreCase(Constants.eMail))
 				return Constants.eMailNum;
+			 else
+				return Constants.redirectNum;
 		}
 		
 		public String getDeliveryMethodName() {
