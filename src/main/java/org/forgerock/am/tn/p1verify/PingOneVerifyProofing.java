@@ -180,7 +180,7 @@ public class PingOneVerifyProofing implements Node {
 
 		@Attribute(order = 1350)
 		default String redirectMessage() {
-			return "Redirecting back to AIC.";
+			return "Redirecting back to PingOne AIC.";
 		}
 		
 		@Attribute(order = 1400)
