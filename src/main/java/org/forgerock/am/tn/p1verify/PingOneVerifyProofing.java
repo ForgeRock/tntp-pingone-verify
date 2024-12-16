@@ -751,7 +751,9 @@ public class PingOneVerifyProofing implements Node {
 	private boolean dobCheck(NodeState ns, JsonValue claimData) throws Exception {
 		
 		String dobClaim = claimData.get("birthDate").asString();
-		
+		if(dobClaim == null) {
+			return false;
+		}
         String toParse = dobClaim + " 00:00:01.000-00:00";
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
         OffsetDateTime dobTime = OffsetDateTime.parse(toParse, formatter);
