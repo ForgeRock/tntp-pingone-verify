@@ -752,6 +752,7 @@ public class PingOneVerifyProofing implements Node {
 		
 		String dobClaim = claimData.get("birthDate").asString();
 		if(dobClaim == null) {
+			ns.putShared(Constants.VerifedFailedReason, "DOB check failed: date of birth not present.");
 			return false;
 		}
         String toParse = dobClaim + " 00:00:01.000-00:00";
