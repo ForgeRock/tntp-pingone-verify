@@ -511,10 +511,11 @@ public class PingOneVerifyProofing implements Node {
 			}
 
 			// age threshold check
-			if (!dobCheck(ns, userData)) {
-				successRetVal = Action.goTo(Constants.FAIL).build();
+			if (config.dobVerification() != 0) {
+				if (!dobCheck(ns, userData)) {
+					successRetVal = Action.goTo(Constants.FAIL).build();
+				}
 			}
-			
 			// fuzzy matching check
 			if (!fuzzyMatchCheck(context, userData, transactionID, pingOneUID, accessToken)) {
 				successRetVal = Action.goTo(Constants.FAIL).build();
