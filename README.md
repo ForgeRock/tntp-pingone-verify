@@ -8,16 +8,18 @@
 
 The PingOne Verify nodes utilizes the PingOne Verify service to enable four different types of secure
 user verification. These verifications include:
-* [Government ID](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
-* [Facial Comparison Government ID](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
-* [Facial Comparison Reference Selfie](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
-* [Liveness](https://docs.pingidentity.com/r/en-us/pingone/pingone_pingoneverify_types_of_verification)
+* Government ID
+* Facial Comparison Government ID
+* Facial Comparison Reference Selfie
+* Liveness
+
+[PingOne Verify types of verification](https://docs.pingidentity.com/pingone/identity_verification_using_pingone_verify/p1_verify_types_of_verification.html#)
 
 > At this time, no other PingOne Verification is supported by these nodes.
 
 Identity Cloud provides the following artifacts to enable the PingOne Verify Nodes:
 
-* [PingOne service](https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep?tab=readme-ov-file#ping-one-service)
+* [PingOne service]([https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep?tab=readme-ov-file#ping-one-service](https://github.com/ForgeRock/tntp-ping-service/))
 * [PingOne Verify Authentication node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/Authentication/Readme.md)
 * [PingOne Verify Proofing node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/Proofing/Readme.md)
 
