@@ -28,6 +28,6 @@ You must set up the following before using the PingOne Verify nodes:
 * [Create a verify policy](https://docs.pingidentity.com/r/en-us/pingone/pingone_creating_verify_policy)
 * [Create a worker application](https://docs.pingidentity.com/r/en-us/pingone/p1_add_app_worker)
   * Requires [Identity Data Admin](https://apidocs.pingidentity.com/pingone/platform/v1/api/#roles) role
-* [PingOne service](https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep?tab=readme-ov-file#ping-one-service)
+* [PingOne service](https://github.com/ForgeRock/tntp-ping-service/)
 
 For more information on these nodes, refer to PingOne Authentication or Proofing node
