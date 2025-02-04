@@ -566,7 +566,7 @@ public class PingOneVerifyProofing implements Node {
 			// message on why failed
 			JsonValue failedReason = response.get(Constants.transactionStatus).get("verificationStatus");
 			ns.putTransient(Constants.VerifedFailedReason, failedReason);
-			
+
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
 			return failRetVal;
 		}
@@ -633,7 +633,7 @@ public class PingOneVerifyProofing implements Node {
 
 	// run a fuzzy match check against attribute confidence map
 	private boolean fuzzyMatchCheck(TreeContext context, JsonValue claimData,
-									String transactionID, String pingOneUID, String accessToken) throws Exception{
+									String transactionID, String pingOneUID, String accessToken) throws Exception {
 		NodeState ns = context.getStateFor(this);
 		
 		Map<String, String> fuzzyMap = config.fuzzyMatchingConfiguration();
@@ -657,11 +657,79 @@ public class PingOneVerifyProofing implements Node {
 				return true;
 		}
 
-		// if here, we need to compare the biographic_match_results
+		logger.error("Parsing the following Metadata");
+		logger.error("{}", metadata);
+		// Iterate through metadata to find the BABEL_STREET provider
 		for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext(); ) {
 			JsonValue thisOne = i.next();
-			if (thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
-				// last check do the levels match?  If exact, compare manually
+			logger.error("PROVIDERS FOUND: {}", thisOne.get("provider"));
+			if (thisOne.get("provider").asString().equalsIgnoreCase("BABEL_STREET") && thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
+				logger.error("************************************************");
+				logger.error("Metadata Provider: {}", thisOne.get("provider"));
+				logger.error("************************************************");
+
+				logger.error("Inside BABEL_STREET check");
+				JsonValue detailedResults = thisOne.get("data").get("detailedResults");
+				logger.error("BABEL_STREET - Detailed Results: {}", detailedResults.toString());
+
+				for (String attributeKey : detailedResults.keys()) {
+					JsonValue attributeData = detailedResults.get(attributeKey);
+					logger.error("Attribute Data: {}", attributeData.toString());
+
+					String confidenceScore = attributeData.get("confidence").asString();
+					logger.error("Confidence Score: {}", confidenceScore);
+
+					String expectedConf = fuzzyMap.get(Helper.getFRVal(attributeKey));
+					logger.error("Expected Confidence: {}", expectedConf);
+
+					// Switch case logic for BABEL_STREET confidence evaluation
+					switch (expectedConf) {
+						case "EXACT":
+							logger.error("*** Inside EXACT Case ***");
+							String expectedAttr = getInfo(Helper.getFRVal(attributeKey), context, true);
+							String claimAttr = claimData.get(Helper.getClaimVal(attributeKey)).toString();
+							if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
+								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+								return false;
+							}
+							break;
+						case "HIGH":
+							logger.error("*** Inside HIGH Case ***");
+							if (!confidenceScore.equalsIgnoreCase("HIGH")) {
+								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+								return false;
+							}
+							break;
+						case "MEDIUM":
+							logger.error("*** Inside MEDIUM Case ***");
+							if (confidenceScore.equalsIgnoreCase("LOW") || confidenceScore.equalsIgnoreCase("NOT_APPLICABLE")) {
+								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+								return false;
+							}
+							break;
+						case "LOW":
+							logger.error("*** Inside LOW Case ***");
+							if (confidenceScore.equalsIgnoreCase("NONE")) {
+								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
+								return false;
+							}
+							break;
+					}
+					return true;
+				}
+			}
+		}
+
+		// Iterate through metadata to find the BIOGRAPHIC_MATCHER provider
+		for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext(); ) {
+			JsonValue thisOne = i.next();
+			if (thisOne.get("provider").asString().equalsIgnoreCase("BIOGRAPHIC_MATCHER") && thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
+				logger.error("************************************************");
+				logger.error("Metadata Provider: {}", thisOne.get("provider"));
+				logger.error("************************************************");
+
+				// Handle BIOGRAPHIC_MATCHER provider metadata
+				logger.error("Inside BIOGRAPHIC_MATCHER check");
 				for (Iterator<JsonValue> innerIt = thisOne.get("data").get("biographic_match_results").iterator(); innerIt.hasNext(); ) {
 					JsonValue thisInnerOne = innerIt.next();
 					// Identifier can be different for onprem vs cloud TODO
@@ -670,6 +738,7 @@ public class PingOneVerifyProofing implements Node {
 
 					String expectedConf = fuzzyMap.get(Helper.getFRVal(thisAttr));
 
+					// Switch case logic for BIOGRAPHIC_MATCHER confidence evaluation
 					switch (expectedConf) {
 						case "EXACT":
 							String expectedAttr = getInfo(Helper.getFRVal(thisAttr), context, true);
@@ -702,6 +771,8 @@ public class PingOneVerifyProofing implements Node {
 				return true;
 			}
 		}
+
+		// If both BABEL_STREET and BIOGRAPHIC_MATCHER are not found, fail verification
 		ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
 		return false;
 	}
