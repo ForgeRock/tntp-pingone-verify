@@ -511,8 +511,10 @@ public class PingOneVerifyProofing implements Node {
 			}
 
 			// age threshold check
-			if (!dobCheck(ns, userData)) {
-				successRetVal = Action.goTo(Constants.FAIL).build();
+			if (config.dobVerification() != 0) {
+				if (!dobCheck(ns, userData)) {
+					successRetVal = Action.goTo(Constants.FAIL).build();
+				}
 			}
 
 			// fuzzy matching check
@@ -805,18 +807,23 @@ public class PingOneVerifyProofing implements Node {
 
 	private boolean dobCheck(NodeState ns, JsonValue claimData) throws Exception {
 
-		String dobClaim = claimData.get("birthDate").asString();
+      String dobClaim = claimData.get("birthDate").asString();
 
-        String toParse = dobClaim + " 00:00:01.000-00:00";
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
-        OffsetDateTime dobTime = OffsetDateTime.parse(toParse, formatter);
-        OffsetDateTime limitTime = OffsetDateTime.now();
-        limitTime = limitTime.minusYears(config.dobVerification());
-        if (dobTime.isBefore(limitTime)) {
-        	return true;
-        }
-        ns.putShared(Constants.VerifedFailedReason, "Age threshold - failed");
+      if(dobClaim == null) {
+        ns.putShared(Constants.VerifedFailedReason, "DOB check failed: date of birth not present.");
         return false;
+      }
+
+      String toParse = dobClaim + " 00:00:01.000-00:00";
+      DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
+      OffsetDateTime dobTime = OffsetDateTime.parse(toParse, formatter);
+      OffsetDateTime limitTime = OffsetDateTime.now();
+      limitTime = limitTime.minusYears(config.dobVerification());
+      if (dobTime.isBefore(limitTime)) {
+        return true;
+      }
+      ns.putShared(Constants.VerifedFailedReason, "Age threshold - failed");
+      return false;
 	}
 
 	private Optional<JsonValue> getUser(TreeContext context, String detail) throws Exception {
