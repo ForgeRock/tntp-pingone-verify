@@ -425,9 +425,7 @@ public class PingOneVerifyAuthentication implements Node {
     	else if (!onObjectAttribute && ns.isDefined(det)) {
     		return ns.get(det).asString();
     	}
-    	
-    	//AMIdentity thisIdentity = getUser(ns);
-    	
+
     	Optional<JsonValue> theInfo = getUser(context, det);
     	
         /* no identifier in sharedState, fetch from DS */

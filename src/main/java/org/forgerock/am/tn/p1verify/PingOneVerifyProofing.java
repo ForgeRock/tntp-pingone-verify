@@ -1,6 +1,6 @@
 /*
- * This code is to be used exclusively in connection with Ping Identity Corporation software or services. 
- * Ping Identity Corporation only offers such software or services to legal entities who have entered into 
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services.
+ * Ping Identity Corporation only offers such software or services to legal entities who have entered into
  * a binding license agreement with Ping Identity Corporation.
  *
  * Copyright 2024 Ping Identity Corporation. All Rights Reserved
@@ -60,8 +60,8 @@ import com.google.inject.assistedinject.Assisted;
 import com.sun.identity.idm.AMIdentity;
 
 @Node.Metadata(
-		outcomeProvider = PingOneVerifyProofing.ProofingOutcomeProvider.class, 
-		configClass = PingOneVerifyProofing.Config.class, 
+		outcomeProvider = PingOneVerifyProofing.ProofingOutcomeProvider.class,
+		configClass = PingOneVerifyProofing.Config.class,
 		tags = {"marketplace", "trustnetwork" })
 public class PingOneVerifyProofing implements Node {
 
@@ -69,10 +69,10 @@ public class PingOneVerifyProofing implements Node {
 	private final Realm realm;
 	private TNTPPingOneConfig tntpPingOneConfig;
 	private final CoreWrapper coreWrapper;
-	
+
 	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyProofing.class);
 	private final String loggerPrefix = "[PingOne Verify Proofing Node]" + PingOneVerifyPlugin.logAppender;
-	
+
 	public static final String BUNDLE = PingOneVerifyProofing.class.getName();
 	private final Helper client;
 	private AMIdentity identity = null;
@@ -105,12 +105,12 @@ public class PingOneVerifyProofing implements Node {
 		default boolean userNotificationChoice() {
 			return false;
 		}
-		
+
 		@Attribute(order = 500)
 		default String userNotificationChoiceMessage() {
 			return "Choose your Delivery Method";
-		}	
-		
+		}
+
 		@Attribute(order = 600)
 		default Constants.GovId govId() {
 			return Constants.GovId.ANY;
@@ -120,12 +120,12 @@ public class PingOneVerifyProofing implements Node {
 		default String userIdAttribute() {
 			return "";
 		}
-		
+
         @Attribute(order = 800)
         default int dobVerification() {
         	return 0;
         }
-		
+
 		@Attribute(order = 900)
 		default Map<String, String> attributeMappingConfiguration() {
 			return new HashMap<String, String>() {
@@ -153,7 +153,7 @@ public class PingOneVerifyProofing implements Node {
 				{
 					/*
 					 * key is DS attribute name, value is the confidence level required for success
-					 */					
+					 */
 	                put(Constants.givenName, "LOW");
 	                put(Constants.sn, "HIGH");
 	                put(Constants.address, "MEDIUM");
@@ -182,7 +182,7 @@ public class PingOneVerifyProofing implements Node {
 		default String redirectMessage() {
 			return "Redirecting back to PingOne AIC.";
 		}
-		
+
 		@Attribute(order = 1400)
 		default boolean saveVerifiedClaims() {
 			return false;
@@ -231,15 +231,15 @@ public class PingOneVerifyProofing implements Node {
 	public Action process(TreeContext context) {
 		try {
 			logger.debug(loggerPrefix + "Started");
-				
+
 			NodeState ns = context.getStateFor(this);
-			
+
 			// check if choice exists
 			if (!ns.isDefined(Constants.VerifyAuthnChoice)) {
 				ns.putShared(Constants.VerifyAuthnChoice, UUID.randomUUID());
 				if  (config.userNotificationChoice()){
 					return Helper.getChoiceCallback(config.userNotificationChoiceMessage());
-				}				
+				}
 			}
 
 			// if we are here, we are ready to init on choice made, or pre-set for user
@@ -256,7 +256,7 @@ public class PingOneVerifyProofing implements Node {
 					userChoice = config.userNotification().getDeliveryMethod();
 				}
 				ns.putShared(Constants.VerifyUsersChoice, Integer.valueOf(userChoice));
-				
+
 				// perform init on choice
 
 				// we need to get the phone number, email, or generate a qr code
@@ -270,7 +270,7 @@ public class PingOneVerifyProofing implements Node {
 					email = getInfo(Constants.mail, context, true);
 					break;
 				}
-				
+
 				JsonValue body = getInitBody(config.verifyPolicyId(), phone, email, context);
 
 				// Setting PingOne Verify redirect callback url
@@ -285,12 +285,12 @@ public class PingOneVerifyProofing implements Node {
 				// need to get the user id
 				String pingUIDLocal = getInfo(config.userIdAttribute(), context, false);
 				String pingUID = client.getPingUID(ns, tntpPingOneConfig, realm, config.userIdAttribute(), pingUIDLocal);
-				
+
 				ns.putShared(Constants.VerifyProofID, pingUID);
-				
+
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
-				
+
 				JsonValue response = client.init(accessToken, tntpPingOneConfig, body, pingUID);
 				String webURL = response.get(Constants.webVerificationUrl).asString();
 				String webVerCode = response.get(Constants.webVerificationCode).asString();
@@ -321,7 +321,7 @@ public class PingOneVerifyProofing implements Node {
 				callbacks.add(pwc);
 				Constants.confirmationCancelCallback.setSelectedIndex(100);// so cancel doesnt looked pressed by default
 				callbacks.add(Constants.confirmationCancelCallback);
-				
+
 				return Action.send(callbacks).build();
 			}
 
@@ -343,29 +343,29 @@ public class PingOneVerifyProofing implements Node {
 
 			// if here, then the communication path has been decided, and init already happened.
 			// we are checking if done and result
-			
+
 			// first check if cancelled hit
 			if (Helper.cancelPushed(context, ns)) {
 				Helper.cleanUpSS(ns, false, false);
 				return Action.goTo(Constants.CANCEL).build();
 			}
-			
+
 			// check if timeout reached
 			long startTime = ns.get(Constants.VerifyDS).asLong();
-			long now = (new Date().getTime())/1000;			
+			long now = (new Date().getTime())/1000;
 			if((now-config.timeOut()) >= startTime) {
 				throw new Exception("Submission timeout reached");
 			}
-			
+
 			String transactionID = ns.get(Constants.VerifyTransactionID).asString();
 			String pingOneUID = null;
-			
+
 			if (ns.isDefined(Constants.VerifyNeedPatch))
 				pingOneUID = ns.get(Constants.VerifyNeedPatch).asString();
 			else {
 				pingOneUID = getInfo(config.userIdAttribute(), context, false);
 			}
-			
+
 			String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() +
 					"/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID +
 					"/verifyTransactions/" + transactionID;
@@ -412,9 +412,9 @@ public class PingOneVerifyProofing implements Node {
 
 		return resumeUri.toASCIIString();
 	}
-	
+
 	private JsonValue getInitBody(String policyId, String telephoneNumber, String emailAddress, TreeContext context) throws Exception{
-		
+
 		JsonValue body = new JsonValue(new LinkedHashMap<String, Object>(1));
 
 
@@ -422,7 +422,7 @@ public class PingOneVerifyProofing implements Node {
 		JsonValue theID = new JsonValue(new LinkedHashMap<String, Object>(1));
 		theID.put("id", policyId);
 		body.put("verifyPolicy", theID);
-		
+
 		// sendNotification section
 		if ((telephoneNumber!=null && !telephoneNumber.isEmpty()) || (emailAddress!=null && !emailAddress.isEmpty())) {
 			JsonValue sendNotification = new JsonValue(new LinkedHashMap<String, Object>(1));
@@ -430,7 +430,7 @@ public class PingOneVerifyProofing implements Node {
 			sendNotification.putIfNotNull("email", emailAddress);
 			body.put("sendNotification", sendNotification);
 		}
-		
+
 		// BIOGRAPHIC_MATCHER
 		if (config.fuzzyMatchingConfiguration() != null && !config.fuzzyMatchingConfiguration().isEmpty()) {
 			Set<String> keys = config.fuzzyMatchingConfiguration().keySet();
@@ -478,7 +478,7 @@ public class PingOneVerifyProofing implements Node {
 			callbacks.add(Constants.confirmationCancelCallback);
 
 			return Action.send(callbacks).build();
-			
+
 			// success outcomes
 		case Constants.THESUCCESS:
 		case Constants.NOT_REQUIRED:
@@ -489,10 +489,10 @@ public class PingOneVerifyProofing implements Node {
 				successRetVal = Action.goTo(Constants.SUCCESSPATCH).build();
 			else
 				successRetVal = Action.goTo(Constants.SUCCESS).build();
-			
+
 			// retrieve verified data
 			JsonValue userData = retrieveUserData(ns);
-			
+
 			// ensure map complete
 			mapClaims(context, userData);
 
@@ -514,7 +514,7 @@ public class PingOneVerifyProofing implements Node {
 			if (!dobCheck(ns, userData)) {
 				successRetVal = Action.goTo(Constants.FAIL).build();
 			}
-			
+
 			// fuzzy matching check
 			if (!fuzzyMatchCheck(context, userData, transactionID, pingOneUID, accessToken)) {
 				successRetVal = Action.goTo(Constants.FAIL).build();
@@ -524,11 +524,11 @@ public class PingOneVerifyProofing implements Node {
 			if(config.tsAccessToken()) {
 				ns.putTransient(Constants.VerifyAT, accessToken);
 			}
-					
+
 			// cleanup SS
 			Helper.cleanUpSS(ns, ns.isDefined(Constants.VerifyNeedPatch), config.tsTransactionId());
 			return successRetVal;
-			
+
 			// fail outcome
 		case Constants.THEFAIL:
 			// save PingOne UID
@@ -557,12 +557,12 @@ public class PingOneVerifyProofing implements Node {
 				failRetVal = Action.goTo(Constants.FAILPATCH).build();
 			else
 				failRetVal = Action.goTo(Constants.FAIL).build();
-			
+
 			// if demo mode, then send to success
 			if (config.demoMode())
 				failRetVal = Action.goTo(Constants.SUCCESS).build();
 			// cleanup SS
-			
+
 			// message on why failed
 			JsonValue failedReason = response.get(Constants.transactionStatus).get("verificationStatus");
 			ns.putTransient(Constants.VerifedFailedReason, failedReason);
@@ -577,57 +577,57 @@ public class PingOneVerifyProofing implements Node {
 	// fetch user data
 	private JsonValue retrieveUserData(NodeState ns) throws Exception{
 		JsonValue retVal = null;
-		
+
 		String pingUID = ns.get(Constants.VerifyProofID).asString();
 		String txID = ns.get(Constants.VerifyTransactionID).asString();
-		
+
 		String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingUID + "/verifyTransactions/" + txID + "/verifiedData?type=GOVERNMENT_ID";
-		
+
 		TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 		String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
-		
+
 		retVal = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
-		
+
 		retVal = retVal.get("_embedded").get("verifiedData").get(0).get("data");
-		
+
 		if (config.saveVerifiedClaims())
 			ns.putTransient(Constants.VerifyClaimResult, retVal);
 
 		return retVal;
 	}
-	
+
 	// govID check
 	private boolean govIDCheckPass(NodeState ns, JsonValue claimData) throws Exception{
 		boolean retVal = false;
 		String thisGovIDCheck = claimData.get("idType").toString();
-		
+
 		thisGovIDCheck = thisGovIDCheck.toLowerCase();
-		
+
 		String cardToCompare = "";
-		
+
 		switch(config.govId().getVal()) {
 			case Constants.DRIVING_LICENSE:
 				cardToCompare = "DriversLicense";
 				break;
 			case Constants.ID_CARD:
 				cardToCompare = "IdentificationCard";
-				break;				
+				break;
 			case Constants.RESIDENCE_PERMIT:
 				cardToCompare = "ResidencePermit";
-				break;					
+				break;
 			case Constants.PASSPORT:
 				cardToCompare = "Passport";
-				break;					
+				break;
 			case Constants.ANY:
 		}
-		
+
 		if (thisGovIDCheck.contains(cardToCompare.toLowerCase()) || config.govId().getVal().equalsIgnoreCase(Constants.ANY)) {
 			retVal = true;
 		}
 		else {
 			ns.putShared(Constants.VerifedFailedReason, "Document type required - failed");
 		}
-		
+
 		return retVal;
 	}
 
@@ -635,57 +635,46 @@ public class PingOneVerifyProofing implements Node {
 	private boolean fuzzyMatchCheck(TreeContext context, JsonValue claimData,
 									String transactionID, String pingOneUID, String accessToken) throws Exception {
 		NodeState ns = context.getStateFor(this);
-		
+
 		Map<String, String> fuzzyMap = config.fuzzyMatchingConfiguration();
-		
+
 		// if nothing in fuzzy mapping, and we don't need to save the metadata - return true
 		if ((fuzzyMap==null || fuzzyMap.isEmpty()) && !config.saveMetadata())
 			return true;
-		
+
 		String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() +
 				"/v1/environments/" + tntpPingOneConfig.environmentId() + "/users/" + pingOneUID +
 				"/verifyTransactions/" + transactionID + "/metaData";
-		
+
 		JsonValue metadata = client.makeHTTPClientCall(accessToken, theURI, HttpConstants.Methods.GET, null);
 
 		// save metadata
 		if (config.saveMetadata()) {
 			ns.putTransient(Constants.VerifyMetadataResult, metadata);
-			
+
 			// if nothing in fuzzy mapping - return true
 			if (fuzzyMap==null || fuzzyMap.isEmpty())
 				return true;
 		}
 
-		logger.error("Parsing the following Metadata");
-		logger.error("{}", metadata);
 		// Iterate through metadata to find the BABEL_STREET provider
 		for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext(); ) {
 			JsonValue thisOne = i.next();
-			logger.error("PROVIDERS FOUND: {}", thisOne.get("provider"));
-			if (thisOne.get("provider").asString().equalsIgnoreCase("BABEL_STREET") && thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
-				logger.error("************************************************");
-				logger.error("Metadata Provider: {}", thisOne.get("provider"));
-				logger.error("************************************************");
+			if (thisOne.get("provider").asString().equalsIgnoreCase("BABEL_STREET") &&
+                    thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") &&
+                    thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
 
-				logger.error("Inside BABEL_STREET check");
 				JsonValue detailedResults = thisOne.get("data").get("detailedResults");
-				logger.error("BABEL_STREET - Detailed Results: {}", detailedResults.toString());
 
 				for (String attributeKey : detailedResults.keys()) {
 					JsonValue attributeData = detailedResults.get(attributeKey);
-					logger.error("Attribute Data: {}", attributeData.toString());
 
 					String confidenceScore = attributeData.get("confidence").asString();
-					logger.error("Confidence Score: {}", confidenceScore);
-
 					String expectedConf = fuzzyMap.get(Helper.getFRVal(attributeKey));
-					logger.error("Expected Confidence: {}", expectedConf);
 
 					// Switch case logic for BABEL_STREET confidence evaluation
 					switch (expectedConf) {
 						case "EXACT":
-							logger.error("*** Inside EXACT Case ***");
 							String expectedAttr = getInfo(Helper.getFRVal(attributeKey), context, true);
 							String claimAttr = claimData.get(Helper.getClaimVal(attributeKey)).toString();
 							if (!expectedAttr.equalsIgnoreCase(claimAttr)) {
@@ -694,21 +683,18 @@ public class PingOneVerifyProofing implements Node {
 							}
 							break;
 						case "HIGH":
-							logger.error("*** Inside HIGH Case ***");
 							if (!confidenceScore.equalsIgnoreCase("HIGH")) {
 								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
 								return false;
 							}
 							break;
 						case "MEDIUM":
-							logger.error("*** Inside MEDIUM Case ***");
 							if (confidenceScore.equalsIgnoreCase("LOW") || confidenceScore.equalsIgnoreCase("NOT_APPLICABLE")) {
 								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
 								return false;
 							}
 							break;
 						case "LOW":
-							logger.error("*** Inside LOW Case ***");
 							if (confidenceScore.equalsIgnoreCase("NONE")) {
 								ns.putShared(Constants.VerifedFailedReason, "Attribute match confidence map - failed");
 								return false;
@@ -723,13 +709,11 @@ public class PingOneVerifyProofing implements Node {
 		// Iterate through metadata to find the BIOGRAPHIC_MATCHER provider
 		for (Iterator<JsonValue> i = metadata.get("_embedded").get("metaData").iterator(); i.hasNext(); ) {
 			JsonValue thisOne = i.next();
-			if (thisOne.get("provider").asString().equalsIgnoreCase("BIOGRAPHIC_MATCHER") && thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") && thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
-				logger.error("************************************************");
-				logger.error("Metadata Provider: {}", thisOne.get("provider"));
-				logger.error("************************************************");
+			if (thisOne.get("provider").asString().equalsIgnoreCase("BIOGRAPHIC_MATCHER") &&
+                    thisOne.get("type").asString().equalsIgnoreCase("BIOGRAPHIC_MATCH") &&
+                    thisOne.get("status").asString().equalsIgnoreCase("SUCCESS")) {
 
 				// Handle BIOGRAPHIC_MATCHER provider metadata
-				logger.error("Inside BIOGRAPHIC_MATCHER check");
 				for (Iterator<JsonValue> innerIt = thisOne.get("data").get("biographic_match_results").iterator(); innerIt.hasNext(); ) {
 					JsonValue thisInnerOne = innerIt.next();
 					// Identifier can be different for onprem vs cloud TODO
@@ -779,7 +763,7 @@ public class PingOneVerifyProofing implements Node {
 
 	private boolean expiredDocCheck(NodeState ns, JsonValue claimData) throws Exception {
 		String expirationDateClaim = claimData.get("expirationDate").asString();
-		
+
         String toParse = expirationDateClaim + " 00:00:01.000-00:00";
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
         OffsetDateTime dateTime = OffsetDateTime.parse(toParse, formatter);
@@ -792,22 +776,22 @@ public class PingOneVerifyProofing implements Node {
             return true;
         }
 	}
-	
-	
+
+
 	private void mapClaims(TreeContext context, JsonValue returnedClaims) throws Exception {
-		
+
         JSONObject attributeMap = new JSONObject(config.attributeMappingConfiguration());
         JSONArray keys = attributeMap.names();
-        
+
         if (keys==null || keys.isEmpty())
         	return;
-        
+
         JsonValue objectAttributes = context.sharedState.get("objectAttributes");
-        
+
         if (objectAttributes==null || objectAttributes.isNull()) {
         	objectAttributes = new JsonValue(new LinkedHashMap<String, Object>(1));
         }
-        
+
         for (int i = 0; i < keys.length(); i++) {
             String key = keys.getString(i);
             String value = attributeMap.getString (key);
@@ -818,11 +802,11 @@ public class PingOneVerifyProofing implements Node {
         NodeState ns = context.getStateFor(this);
         ns.putShared("objectAttributes",objectAttributes);
 	}
-	
+
 	private boolean dobCheck(NodeState ns, JsonValue claimData) throws Exception {
-		
+
 		String dobClaim = claimData.get("birthDate").asString();
-		
+
         String toParse = dobClaim + " 00:00:01.000-00:00";
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSXXX");
         OffsetDateTime dobTime = OffsetDateTime.parse(toParse, formatter);
@@ -832,21 +816,21 @@ public class PingOneVerifyProofing implements Node {
         	return true;
         }
         ns.putShared(Constants.VerifedFailedReason, "Age threshold - failed");
-        return false;		
-	}	
-	
+        return false;
+	}
+
 	private Optional<JsonValue> getUser(TreeContext context, String detail) throws Exception {
-		
+
 		if (idmIntegrationService.isEnabled()) {
-			
+
 			Optional<String> identity = IdmIntegrationHelper.stringAttribute(IdmIntegrationHelper.getUsernameFromContext(idmIntegrationService, context));
-			
+
 			Optional<JsonValue> user = IdmIntegrationHelper.getObject(idmIntegrationService, realm,
 					context.request.locales, context.identityResource, "userName", identity, USERNAME, detail);
-		
+
 			return user;
 		} else {
-			if (this.identity==null || 
+			if (this.identity==null ||
 					!(identity.getName().equalsIgnoreCase(context.getStateFor(this).get(USERNAME).asString())) ||
 					!(identity.getRealm().equalsIgnoreCase(context.getStateFor(this).get(REALM).asString()))) {
 					String userName = context.getStateFor(this).get(USERNAME).asString();
@@ -854,24 +838,24 @@ public class PingOneVerifyProofing implements Node {
 					this.identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(userName,realm);
 			}
 
-			
+
 			JsonValue jv = new JsonValue(new LinkedHashMap<String, Object>(1));
 			if (this.identity.getAttribute(detail)!=null && !this.identity.getAttribute(detail).isEmpty()) {
 				jv.add(detail, this.identity.getAttribute(detail).iterator().next());
-			}			
+			}
 			return Optional.ofNullable(jv);
 		}
 	}
-	
-	
+
+
 	private String getInfo(String det, TreeContext context, boolean onObjectAttribute) throws Exception {
 		NodeState ns = context.getStateFor(this);
     	if (onObjectAttribute && ns.isDefined(Constants.objectAttributes)) {
-    		
+
     		JsonValue objectAttributesTS = context.getTransientState(Constants.objectAttributes);
     		JsonValue objectAttributesSecured = context.getSecureState(Constants.objectAttributes);
     		JsonValue objectAttributes = context.sharedState.get(Constants.objectAttributes);
-    		
+
     		if(objectAttributesTS!=null && objectAttributesTS.isNotNull() && objectAttributesTS.isDefined(det)) {
     			return objectAttributesTS.get(det).asString();
     		}
@@ -885,24 +869,24 @@ public class PingOneVerifyProofing implements Node {
     	else if (!onObjectAttribute && ns.isDefined(det)) {
     		return ns.get(det).asString();
     	}
-    	
+
     	// AMIdentity thisIdentity = getUser(ns);
-    	
+
     	Optional<JsonValue> theInfo = getUser(context, det);
-    	
+
         /* no identifier in sharedState, fetch from DS */
         if (theInfo != null && theInfo.isPresent()) {
-        	
+
         	if (theInfo.get().isString())
         		return theInfo.get().asString();
         	else if (theInfo.get().isMap() && theInfo.get().iterator().hasNext())
         		return theInfo.get().get(det).asString();
         		// return theInfo.get().iterator().next().asString();
         }
-        
+
         return null;
     }
-	
+
 	public static class ProofingOutcomeProvider implements OutcomeProvider {
 		@Override
 		public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
