@@ -3,8 +3,24 @@ package org.forgerock.am.tn.p1verify;
 import javax.security.auth.callback.ConfirmationCallback;
 
 public class Constants {
-	
-	
+
+// ----------------------------------------------------------------------------
+// PingOne Verify API Response Field Constants duplicated here to remove
+// dependency on the internal pingone-api library for AM 7.5 compatibility.
+// ----------------------------------------------------------------------------
+	public static final String RESPONSE_TRANSACTION_ID = "id";
+	public static final String RESPONSE_TRANSACTION_STATUS = "transactionStatus";
+	public static final String RESPONSE_STATUS = "status";
+	public static final String RESPONSE_VERIFICATION_STATUS = "verificationStatus";
+	public static final String RESPONSE_URL = "webVerificationUrl";
+	public static final String RESPONSE_CODE = "webVerificationCode";
+	public static final String RESPONSE_EMBEDDED = "_embedded";
+	public static final String RESPONSE_METADATA = "metaData";
+	public static final String RESPONSE_TRANSACTIONS = "verifyTransactions";
+	public static final String RESPONSE_TRANSACTION_TIMED_OUT = "TRANSACTION_TIMED_OUT";
+	public static final String RESPONSE_VERIFIED_DATA = "verifiedData";
+
+
 	protected final static String ANY = "ANY";
 	protected final static String DRIVING_LICENSE = "DRIVING_LICENSE";
 	protected final static String PASSPORT = "PASSPORT";

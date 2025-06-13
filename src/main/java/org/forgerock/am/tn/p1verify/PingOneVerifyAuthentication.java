@@ -26,7 +26,6 @@ import javax.security.auth.callback.ConfirmationCallback;
 import javax.security.auth.callback.TextOutputCallback;
 
 import org.forgerock.json.JsonValue;
-import org.forgerock.oauth2.core.AccessToken;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.Action;
 import org.forgerock.openam.auth.node.api.Node;
@@ -68,8 +67,7 @@ public class PingOneVerifyAuthentication implements Node {
 	private final Helper client;
 	private AMIdentity identity = null;
 	private final IdmIntegrationService idmIntegrationService;
-	
-	
+
 	/**
 	 * Configuration for the node.
 	 */
@@ -81,7 +79,7 @@ public class PingOneVerifyAuthentication implements Node {
 		@Attribute(order = 100, choiceValuesClass = TNTPPingOneConfigChoiceValues.class)
 		default String tntpPingOneConfigName() {
 			return TNTPPingOneConfigChoiceValues.createTNTPPingOneConfigName("Global Default");
-		};
+		}
 
 		@Attribute(order = 200)
 		default String verifyPolicyId() {
