@@ -21,9 +21,9 @@ Identity Cloud provides the following artifacts to enable the PingOne Verify int
 
 * [PingOne Verify Evaluation Node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/Evaluation/README.md)
 * [PingOne Verify Completion Decision Node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/CompletionDecision/README.md)
-* [PingOne Identity Match Node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/identitymatch/README.md)
-* [PingOne Create User Node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/createuser/README.md)
-* [PingOne Delete User Node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/deleteuser/README.md)
+* [PingOne Identity Match Node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/IdentityMatch/README.md)
+* [PingOne Create User Node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/CreateUser/README.md)
+* [PingOne Delete User Node](https://github.com/ForgeRock/tntp-pingone-verify/blob/main/docs/DeleteUser/README.md)
 
 You must set up the following before using these nodes:
 
