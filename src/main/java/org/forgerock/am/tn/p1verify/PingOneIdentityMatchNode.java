@@ -3,8 +3,6 @@ package org.forgerock.am.tn.p1verify;
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.sun.identity.idm.AMIdentity;
-import com.sun.identity.idm.IdRepoException;
-import com.iplanet.sso.SSOException;
 import org.forgerock.am.identity.application.IdentityNotFoundException;
 import org.forgerock.json.JsonValue;
 import org.forgerock.openam.annotations.sm.Attribute;
@@ -18,6 +16,8 @@ import org.forgerock.util.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 
 import static org.forgerock.am.tn.p1verify.FailureReason.getFailureJson;
@@ -79,25 +79,21 @@ public class PingOneIdentityMatchNode extends AbstractDecisionNode {
     @Override
     public Action process(TreeContext context) {
         logger.debug("PingOneIdentityMatchNode started");
-        logger.error("PingOneIdentityMatchNode started");
 
         NodeState nodeState = context.getStateFor(this);
 
         try {
             if (!nodeState.isDefined(USERNAME)) {
-                logger.error("Identity Match - USERNAME not defined.");
                 return handleFailure(nodeState, FailureReason.MISSING_USERNAME, null);
             }
 
             String username = nodeState.get(USERNAME).asString();
             AMIdentity amIdentity = getIdentity(context);
             logger.debug("AMIdentity found: {} for user: {}", amIdentity.getUniversalId(), username);
-            logger.error("Identity Match - AMIdentity found: {} for user: {}.", amIdentity.getUniversalId(), username);
 
             TNTPPingOneUtility utility = TNTPPingOneUtility.getInstance();
             String accessToken = utility.getAccessToken(realm, tntpPingOneConfig);
             if (accessToken == null) {
-                logger.error("Identity Match - Unable to retrieve ACCESS_TOKEN.");
                 return handleFailure(nodeState, FailureReason.ACCESS_TOKEN, null);
             }
 
@@ -105,23 +101,16 @@ public class PingOneIdentityMatchNode extends AbstractDecisionNode {
             String pingAttr = config.pingIdentityAttribute();
             String amAttrValue = userHelper.getUserAttribute(amIdentity, amAttr);
             if (StringUtils.isEmpty(amAttrValue)) {
-                logger.error("Identity Match - Unable to retrieve USER_ATTRIBUTES");
                 return handleFailure(nodeState, FailureReason.INVALID_ATTRIBUTE_CONFIGURATION, null);
             }
 
-            logger.error("Identity Match - AM ATTR: {}", amAttr);
-            logger.error("Identity Match - PING ATTR: {}", pingAttr);
-            logger.error("Identity Match - AM ATTR VALUE: {}", amAttrValue);
-
+            String rawFilter = pingAttr + " eq \"" + amAttrValue + "\"";
+            String encodedFilter = URLEncoder.encode(rawFilter, StandardCharsets.UTF_8).replace("+","%20");
             String uri = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix()
                     + "/v1/environments/" + tntpPingOneConfig.environmentId()
-                    + "/users?filter=" + pingAttr + "+eq+'" + amAttrValue + "'";
-
-            logger.error("Identity Match - Request URI: {}", uri);
+                    + "/users?filter=" + encodedFilter;
 
             JsonValue response = client.makeHTTPClientCall(accessToken, uri, "GET", null);
-
-            logger.error("Identity Match - API Response: {}", response);
 
             int count = userHelper.userCount(response);
 

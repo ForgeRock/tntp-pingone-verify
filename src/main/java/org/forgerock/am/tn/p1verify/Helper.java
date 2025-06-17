@@ -18,6 +18,7 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 import javax.security.auth.callback.TextOutputCallback;
 
+import org.apache.commons.lang.StringUtils;
 import org.forgerock.http.HttpApplicationException;
 import org.forgerock.http.handler.HttpClientHandler;
 import org.forgerock.http.header.AuthorizationHeader;
@@ -102,7 +103,15 @@ public class Helper {
 			Response response = handler.handle(new RootContext(), request).getOrThrow();
 
 			if (response.getStatus().isSuccessful()) {
-				return json(response.getEntity().getJson());
+				String responseBody = response.getEntity().getString();
+				if (StringUtils.isNotBlank(responseBody)) {
+					logger.error("HELPER METHOD - Response Body Detected");
+					return json(response.getEntity().getJson());
+				} else {
+					logger.error("HELPER METHOD - Response Body NOT Detected");
+					return JsonValue.json(JsonValue.object()); // return empty JSON
+				}
+//				return json(response.getEntity().getJson());
 			} else {
 				throw new Exception("PingOne Verify verifyTransaction response with error." + response.getStatus() + "-" + response.getEntity().getString());
 			}

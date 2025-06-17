@@ -64,7 +64,6 @@ import org.forgerock.json.JsonValue;
 import org.forgerock.openam.sm.annotations.adapters.TimeUnit;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.*;
-import org.forgerock.openam.auth.nodes.helpers.IdmIntegrationHelper;
 import org.forgerock.openam.auth.nodes.helpers.LocalizationHelper;
 import org.forgerock.openam.authentication.callbacks.PollingWaitCallback;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
@@ -117,7 +116,7 @@ public class PingOneVerifyEvaluationNode implements Node {
 	static final String QR_CALLBACK_STRING = "callback_0";
 	static final int DEFAULT_TIMEOUT = 120;
 
-	private AMIdentity identity = null;
+//	private AMIdentity identity = null;
 
 	private final CoreWrapper coreWrapper;
 	private final Helper client;
@@ -301,21 +300,16 @@ public class PingOneVerifyEvaluationNode implements Node {
 		logger.debug("Retrieved from shared state - pingOneUserId: {}", pingOneUserId);
 
 		try {
-			logger.error("Entering main try statement...");
 			// Obtain PingOne access token
 			TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 			String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
-			logger.error("Access Token: {}", accessToken);
 			if (accessToken == null) {
-				logger.error("Access Token is null");
 				return handleFailure(nodeState, ACCESS_TOKEN, null);
 			}
 
 			// Check if choice was made
 			Optional<ConfirmationCallback> confirmationCallback = context.getCallback(ConfirmationCallback.class);
-			logger.error("Confirmation Callback Choice: {}", confirmationCallback);
 			if (confirmationCallback.isPresent()) {
-				logger.error("Retrieve selected delivery method and start a new Identity Verification process.");
 				logger.debug("Retrieve selected delivery method and start a new Identity Verification process.");
 				int choice = confirmationCallback.get().getSelectedIndex();
 				nodeState.putShared(PINGONE_VERIFY_DELIVERY_METHOD_KEY, choice);
@@ -324,27 +318,20 @@ public class PingOneVerifyEvaluationNode implements Node {
 
 			// Check if transaction was started
 			Optional<PollingWaitCallback> pollingWaitCallback = context.getCallback(PollingWaitCallback.class);
-			logger.error("Polling Wait Callback: {}", pollingWaitCallback);
 			if (pollingWaitCallback.isPresent()) {
 				// Transaction already started
-				logger.error("Identity Verification process already started. Waiting for completion...");
 				logger.debug("Identity Verification process already started. Waiting for completion...");
 				if (!nodeState.isDefined(PINGONE_VERIFY_TRANSACTION_ID_KEY)) {
-					logger.error("pinOneVerifyTransactionId not defined...");
 					return handleFailure(nodeState, MISSING_PINGONE_VERIFY_TRANSACTION_ID, null);
 				}
 				return getActionFromVerifyTransactionStatus(context, accessToken, pingOneUserId);
 			} else {
 				// Check if it should handle a redirect flow
 				if (nodeState.isDefined(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY)) {
-					logger.error("PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY: {}", PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY);
-					logger.error("Handling redirect flow.");
 					logger.debug("Handling redirect flow.");
 					if (context.request.parameters.containsKey("code")) {
 						String code = context.request.parameters.get("code").get(0);
-						logger.error("Redirect code: {}", code);
 						if (code.equals(nodeState.get(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY).asString())) {
-							logger.error("Code found in request, completing the Identity Verification process.");
 							logger.debug("Code found in request, completing the Identity Verification process.");
 							nodeState.remove(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY);
 							return getActionFromVerifyTransactionStatus(context, accessToken, pingOneUserId);
@@ -358,7 +345,6 @@ public class PingOneVerifyEvaluationNode implements Node {
 
 				// Check if it should resume a previous transaction set by the Completion Decision node
 				if (nodeState.isDefined(PINGONE_VERIFY_TRANSACTION_ID_KEY)) {
-					logger.error("Resuming an Identity Verification process previously started.");
 					logger.debug("Resuming an Identity Verification process previously started.");
 					nodeState.putShared(PINGONE_VERIFY_DELIVERY_METHOD_KEY, 0);
 					nodeState.putShared(PINGONE_VERIFY_TIMEOUT_KEY, 0);
@@ -367,13 +353,11 @@ public class PingOneVerifyEvaluationNode implements Node {
 
 				// Check if the delivery method should be selected by the user
 				if (config.allowDeliveryMethodSelection() && !config.deliveryMethod().equals(DeliveryMethod.REDIRECT)) {
-					logger.error("Present options to select the delivery method.");
 					logger.debug("Present options to select the delivery method.");
 					List<Callback> callbacks = createChoiceCallbacks(context);
 					return send(callbacks).build();
 				} else {
 					// Start new transaction
-					logger.error("Start new Identity Verification process.");
 					logger.debug("Start new Identity Verification process.");
 					return startVerifyTransaction(context, accessToken, config.deliveryMethod(), pingOneUserId);
 				}
@@ -392,17 +376,10 @@ public class PingOneVerifyEvaluationNode implements Node {
 	}
 
 	private Action getActionFromVerifyTransactionStatus(TreeContext context, String accessToken, String userId) throws IllegalStateException {
-		logger.error("++++++++++++++ Inside getActionFromVerifyTransactionStatus ++++++++++++++");
-
-		logger.error("getActionFromVerifyTransactionStatus - context: {}", context);
-		logger.error("getActionFromVerifyTransactionStatus - accessToken: {}", accessToken);
-		logger.error("getActionFromVerifyTransactionStatus - userId: {}", userId);
-
 		NodeState nodeState = context.getStateFor(this);
 
 		// Retrieve transaction ID from shared state
 		String transactionId = Objects.requireNonNull(nodeState.get(PINGONE_VERIFY_TRANSACTION_ID_KEY)).asString();
-		logger.error("getActionFromVerifyTransactionStatus - transactionId: {}", transactionId);
 
 		// Determine delivery method
 		DeliveryMethod deliveryMethod;
@@ -413,8 +390,6 @@ public class PingOneVerifyEvaluationNode implements Node {
 			deliveryMethod = config.deliveryMethod();
 		}
 
-		logger.error("getActionFromVerifyTransactionStatus - deliveryMethod: {}", deliveryMethod);
-
 		// Check transaction status and take appropriate action
 		try{
 			// Retrieve the verification transaction status
@@ -422,67 +397,44 @@ public class PingOneVerifyEvaluationNode implements Node {
 					+ "/v1/environments/" + tntpPingOneConfig.environmentId()
 					+ "/users/" + userId + "/verifyTransactions/" + transactionId;
 			JsonValue transactionResult = client.makeHTTPClientCall(accessToken, uri, "GET", null);
-			logger.error("getActionFromVerifyTransactionStatus - transactionResult: {}", transactionResult);
-
 			String url = transactionResult.get(RESPONSE_URL).asString();
-			logger.error("getActionFromVerifyTransactionStatus - url: {}", url);
-
 			String code = transactionResult.get(RESPONSE_CODE).asString();
-			logger.error("getActionFromVerifyTransactionStatus - code: {}", code);
-
 			String status = transactionResult.get(RESPONSE_TRANSACTION_STATUS).get(RESPONSE_STATUS).asString();
-			logger.error("getActionFromVerifyTransactionStatus - status: {}", status);
 
 			switch (VerifyTransactionStatus.fromString(status)) {
 				case REQUESTED:
 				case PARTIAL:
 				case INITIATED:
 				case IN_PROGRESS:
-					logger.error("getActionFromVerifyTransactionStatus - switch path: REQUESTED, PARTIAL, INITIATED, IN_PROGRESS");
-
 					List<Callback> callbacks = getCallbacksForDeliveryMethod(context, deliveryMethod, url, code);
 					return waitTransactionCompletion(nodeState, callbacks).build();
 				case SUCCESS:
 				case NOT_REQUIRED:
 				case APPROVED_NO_REQUEST:
 				case APPROVED_MANUALLY:
-					logger.error("getActionFromVerifyTransactionStatus - switch path: SUCCESS, NOT_REQUIRED, APPROVED_NO_REQUEST, APPROVED_MANUALLY");
-
 					if (config.storeVerifiedData()) {
-						logger.error("storeVerifiedData == true");
 						// Retrieve the verified identity data for the transaction
 						String readURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix()
 								+ "/v1/environments/" + tntpPingOneConfig.environmentId()
 								+ "/users/" + userId
 								+ "/verifyTransactions/" + transactionId + "/verifiedData";
 						JsonValue verifiedData = client.makeHTTPClientCall(accessToken, readURI, "GET", null);
-
-						logger.error("getActionFromVerifyTransactionStatus - verifiedData: {}", verifiedData);
-
 						nodeState.putShared(PINGONE_VERIFY_VERIFIED_DATA_KEY, verifiedData);
 					}
 					if (config.storeVerificationMetadata()) {
-						logger.error("storeVerificationMetadata == true");
 						// Retrieve metadata explaining the verification decision
 						String readAllVerifiedDataURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix()
 								+ "/v1/environments/" + tntpPingOneConfig.environmentId()
 								+ "/users/" + userId
 								+ "/verifyTransactions/" + transactionId + "/metaData";
 						JsonValue metadata = client.makeHTTPClientCall(accessToken, readAllVerifiedDataURI, "GET", null);
-
-						logger.error("getActionFromVerifyTransactionStatus - metadata: {}", metadata);
-
 						nodeState.putShared(PINGONE_VERIFY_METADATA_KEY, metadata);
 					}
 
 					return buildAction(SUCCESS_OUTCOME_ID, nodeState);
 				case FAIL:
-					logger.error("getActionFromVerifyTransactionStatus - switch path: FAIL");
-
 					return handleFailure(nodeState, IDENTITY_VERIFICATION_FAILED, null);
 				default:
-					logger.error("getActionFromVerifyTransactionStatus - switch path: default");
-
 					throw new IllegalStateException("Unexpected status returned from PingOne Verify Transaction: " + status);
 			}
 		} catch (Exception e) {
@@ -491,12 +443,6 @@ public class PingOneVerifyEvaluationNode implements Node {
 	}
 
 	private Action startVerifyTransaction(TreeContext context, String accessToken, DeliveryMethod deliveryMethod, String userId) throws JsonProcessingException, IdentityNotFoundException, IdRepoException, SSOException, NodeProcessException {
-		logger.error("++++++++++++++ Inside startVerifyTransaction ++++++++++++++");
-
-		logger.error("startVerifyTransaction - context: {}", context);
-		logger.error("startVerifyTransaction - accessToken: {}", accessToken);
-		logger.error("startVerifyTransaction - deliveryMethod: {}", deliveryMethod);
-		logger.error("startVerifyTransaction - userId: {}", userId);
 
 		// Create a new verify transaction
 		JsonValue requestBody = getRequestBody(context, deliveryMethod);
@@ -506,15 +452,10 @@ public class PingOneVerifyEvaluationNode implements Node {
 		try {
 			JsonValue result = client.makeHTTPClientCall(accessToken, uri, "POST", requestBody);
 
-			logger.error("startVerifyTransaction - API Response: {}", result);
-
 			// Retrieve response values
 			String transactionId = result.get(RESPONSE_TRANSACTION_ID).asString();
-			logger.error("startVerifyTransaction - transactionId: {}", transactionId);
 			String url = result.get(RESPONSE_URL).asString();
-			logger.error("startVerifyTransaction - url: {}", url);
 			String code = result.get(RESPONSE_CODE).asString();
-			logger.error("startVerifyTransaction - code: {}", code);
 
 			// Store transaction ID in shared state
 			NodeState nodeState = context.getStateFor(this);
@@ -527,27 +468,17 @@ public class PingOneVerifyEvaluationNode implements Node {
 			return send(callbacks).build();
 
 		} catch (Exception e) {
-			logger.error("startVerifyTransaction - caught exception");
 			return handleFailure(context.getStateFor(this), UNEXPECTED_ERROR, e);
 		}
 	}
 
 	private List<Callback> getCallbacksForDeliveryMethod(TreeContext context, DeliveryMethod deliveryMethod, String url, String code) {
-		logger.error("++++++++++++++ Inside getCallbacksForDeliveryMethod ++++++++++++++");
-
-		logger.error("getCallbacksForDeliveryMethod - deliveryMethod: {}", deliveryMethod);
-		logger.error("getCallbacksForDeliveryMethod - url: {}", url);
-		logger.error("getCallbacksForDeliveryMethod - code: {}", code);
-
 		if (deliveryMethod.equals(DeliveryMethod.QRCODE)) {
-			logger.error("getCallbacksForDeliveryMethod - QRCODE delivery method");
 
 			Callback scanTextOutputCallback = createLocalizedTextCallback(context, this.getClass(), config.scanQRCodeMessage(), DEFAULT_SCAN_QRCODE_MESSAGE_KEY);
 			Callback qrCodeCallback = new ScriptTextOutputCallback(GenerationUtils.getQRCodeGenerationJavascriptForAuthenticatorAppRegistration(QR_CALLBACK_STRING, url));
 			Callback hiddenCallback = new HiddenValueCallback(HIDDEN_CALLBACK_ID, url);
 
-			logger.error("Displaying QR code for PingOne Verify URL: {}", url);
-			logger.debug("Displaying QR code for PingOne Verify URL: {}", url);
 			return ImmutableList.of(
 					scanTextOutputCallback,
 					qrCodeCallback,
@@ -555,19 +486,16 @@ public class PingOneVerifyEvaluationNode implements Node {
 					createPollingWaitCallback(context, code)
 			);
 		} else if (deliveryMethod.equals(DeliveryMethod.REDIRECT)) {
-			logger.error("getCallbacksForDeliveryMethod - REDIRECT delivery method");
 
 			String redirectUrl = url.concat("&dt=1");
 			RedirectCallback redirectCallback = new RedirectCallback(redirectUrl, null, GET);
 			redirectCallback.setTrackingCookie(true);
 
-			logger.error("Redirecting to PingOne Verify URL: {}", redirectUrl);
 			logger.debug("Redirecting to PingOne Verify URL: {}", redirectUrl);
 			return ImmutableList.of(
 					redirectCallback
 			);
 		} else {
-			logger.error("Sending PingOne Verify URL via {}.", deliveryMethod);
 			logger.debug("Sending PingOne Verify URL via {}.", deliveryMethod);
 			return ImmutableList.of(
 					createPollingWaitCallback(context, code)
@@ -576,23 +504,11 @@ public class PingOneVerifyEvaluationNode implements Node {
 	}
 
 	private Callback createPollingWaitCallback(TreeContext context, String code) {
-		logger.error("++++++++++++++ Inside createPollingWaitCallback ++++++++++++++");
-		logger.error("createPollingWaitCallback - code: {}", code);
-
 		String waitingMessage = getWaitingMessage(context, code);
-		logger.error("createPollingWaitCallback - waitingMessage: {}", waitingMessage);
-
-//		return PollingWaitCallback.makeCallback()
-//				.withWaitTime(String.valueOf(TRANSACTION_POLL_INTERVAL))
-//				.withMessage(waitingMessage)
-//				.build();
 		return new PollingWaitCallback(String.valueOf(TRANSACTION_POLL_INTERVAL), waitingMessage);
 	}
 
 	private JsonValue getRequestBody(TreeContext context, DeliveryMethod deliveryMethod) throws JsonProcessingException, IdRepoException, SSOException, IllegalArgumentException, IdentityNotFoundException, NodeProcessException {
-		logger.error("++++++++++++++ Inside getRequestBody ++++++++++++++");
-		logger.error("getRequestBody - deliveryMethod: {}", deliveryMethod);
-
 		VerifyRequestBody requestBody = new VerifyRequestBody();
 
 		// Get AM Identity
@@ -600,16 +516,14 @@ public class PingOneVerifyEvaluationNode implements Node {
 
 		// Add send notification if delivery method is email or sms
 		if (deliveryMethod.equals(DeliveryMethod.EMAIL)) {
-			logger.error("getRequestBody - EMAIL delivery method");
-			logger.error("AM EMAIL: {}", userHelper.getUserAttribute(amIdentity, AM_EMAIL));
+			logger.debug("AM EMAIL: {}", userHelper.getUserAttribute(amIdentity, AM_EMAIL));
 			requestBody.setSendNotification(
 					new VerifyRequestBody.SendNotification(
 					null,
 					userHelper.getUserAttribute(amIdentity, AM_EMAIL))
 			);
 		} else if (deliveryMethod.equals(DeliveryMethod.SMS)) {
-			logger.error("getRequestBody - SMS delivery method");
-			logger.error("AM SMS: {}", userHelper.getUserAttribute(amIdentity, AM_PHONE));
+			logger.debug("AM SMS: {}", userHelper.getUserAttribute(amIdentity, AM_PHONE));
 			requestBody.setSendNotification(
 					new VerifyRequestBody.SendNotification(
 					userHelper.getUserAttribute(amIdentity, AM_PHONE),
@@ -623,21 +537,17 @@ public class PingOneVerifyEvaluationNode implements Node {
 
 		// Add verify policy id if present
 		if (StringUtils.isNotEmpty(config.verifyPolicyId())) {
-			logger.error("getRequestBody - verifyPolicyId present: {}", config.verifyPolicyId());
 			requestBody.setVerifyPolicy(new VerifyRequestBody.VerifyPolicy(config.verifyPolicyId()));
 		}
 
-		logger.error("getRequestBody - biographicMatching: {}", config.biographicMatching());
 		// Add biographic matching if present
 		if (!config.biographicMatching().isEmpty()) {
-			logger.error("getRequestBody - biographicMatching is not empty...");
 			VerifyRequestBody.Requirements.Builder requirementsBuilder = new VerifyRequestBody.Requirements.Builder();
 			for (Map.Entry<String, String> entry : config.biographicMatching().entrySet()) {
 				String requirementEntry = entry.getKey();
 				String attributeEntry = entry.getValue();
 
 				String attributeValue = userHelper.getUserAttribute(amIdentity, attributeEntry);
-				logger.error("getRequestBody - biographicMatching attribute: {}", attributeValue);
 				if (StringUtils.isNotEmpty(attributeValue)) {
 					switch (BiographicMatchingRequirement.fromString(requirementEntry)) {
 						case REFERENCE_SELFIE:
@@ -683,34 +593,20 @@ public class PingOneVerifyEvaluationNode implements Node {
 	}
 
 	private Action.ActionBuilder waitTransactionCompletion(NodeState nodeState, List<Callback> callbacks) {
-		logger.error("++++++++++++++ Inside waitTransactionCompletion ++++++++++++++");
-
-		logger.error("Waiting verify transaction to be completed.");
-		logger.debug("Waiting verify transaction to be completed.");
-
 		long timeOutInMs = config.timeout().getSeconds() * 1000;
 		int timeElapsed = nodeState.get(PINGONE_VERIFY_TIMEOUT_KEY).asInteger();
 
-		logger.error("Timeout In Ms: {}", timeOutInMs);
-		logger.error("Time Elapsed: {}", timeElapsed);
-
 		if (timeElapsed >= timeOutInMs) {
-			logger.error("Inside 'timeElapsed >= timeOutInMs' IF statement...");
 			return goTo(TIMEOUT_OUTCOME_ID);
 		} else {
-			logger.error("Inside 'timeElapsed >= timeOutInMs' ELSE statement...");
 			nodeState.putTransient(PINGONE_VERIFY_TIMEOUT_KEY, timeElapsed + TRANSACTION_POLL_INTERVAL);
 		}
-		logger.error("After the 'timeElapsed >= timeOutInMs' IF/ELSE statement...");
 		return send(callbacks);
 	}
 
 	private List<Callback> createChoiceCallbacks(TreeContext context) {
-		logger.error("++++++++++++++ Inside createChoiceCallbacks ++++++++++++++");
-
 		List<Callback> callbacks = new ArrayList<>();
 		String message = localizationHelper.getLocalizedMessage(context, this.getClass(), config.deliveryMethodMessage(), DEFAULT_DELIVERY_METHOD_MESSAGE_KEY);
-		logger.error("createChoiceCallbacks - message: {}", message);
 
 		String[] options = {
 				localizationHelper.getLocalizedMessage(context, this.getClass(), null, "deliveryMethod.QRCODE"),
@@ -728,42 +624,28 @@ public class PingOneVerifyEvaluationNode implements Node {
 	}
 
 	private String createRedirectCode(TreeContext context) {
-		logger.error("++++++++++++++ Inside createRedirectCode ++++++++++++++");
 		NodeState nodeState = context.getStateFor(this);
 		String code = UUID.randomUUID().toString();
 		nodeState.putShared(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY, code);
-		logger.error("createRedirectCode - code: {}", code);
 		return code;
 	}
 
 	private String getWaitingMessage(TreeContext context, String verificationCode) {
-		logger.error("++++++++++++++ Inside getWaitingMessage ++++++++++++++");
-		logger.error("getWaitingMessage - verificationCode: {}", verificationCode);
 		String value = localizationHelper.getLocalizedMessage(context, PingOneVerifyEvaluationNode.class, config.waitingMessage(), DEFAULT_WAITING_MESSAGE_KEY);
-		logger.error("getWaitingMessage - value: {}", value);
 		return value.replaceAll("\\{\\{verificationCode\\}\\}", verificationCode);
 	}
 
 	private Callback createLocalizedTextCallback(TreeContext context, Class<?> bundleClass, Map<Locale, String> scanQRCodeMessage, String key) {
-		logger.error("++++++++++++++ Inside createLocalizedTextCallback ++++++++++++++");
-		logger.error("createLocalizedTextCallback - bundleClass: {}", bundleClass);
-		logger.error("createLocalizedTextCallback - scanQRCodeMessage: {}", scanQRCodeMessage);
-		logger.error("createLocalizedTextCallback - key: {}", key);
-
 		String message = localizationHelper.getLocalizedMessage(context, bundleClass, scanQRCodeMessage, key);
-		logger.error("createLocalizedTextCallback - message: {}", message);
 		return new TextOutputCallback(TextOutputCallback.INFORMATION, message);
 	}
 
 	private Action buildAction(String outcome, NodeState nodeState) {
-		logger.error("++++++++++++++ Inside buildAction ++++++++++++++");
-		logger.error("buildAction - outcome: {}", outcome);
 		Action.ActionBuilder builder = goTo(outcome);
 		return cleanupSharedState(nodeState, builder).build();
 	}
 
 	private Action.ActionBuilder cleanupSharedState(NodeState nodeState, Action.ActionBuilder builder) {
-		logger.error("++++++++++++++ Inside cleanupSharedState ++++++++++++++");
 		nodeState.remove(PINGONE_VERIFY_TRANSACTION_ID_KEY);
 		nodeState.remove(PINGONE_VERIFY_DELIVERY_METHOD_KEY);
 		nodeState.remove(PINGONE_VERIFY_TIMEOUT_KEY);
@@ -772,7 +654,6 @@ public class PingOneVerifyEvaluationNode implements Node {
 	}
 
 	private Action handleFailure(NodeState nodeState, FailureReason failureReason, Exception exception) {
-		logger.error("++++++++++++++ Inside handleFailure ++++++++++++++");
 		logger.error(failureReason.getMessage(), exception);
 		if (config.captureFailure()) {
 			String failureJson = getFailureJson(failureReason, exception);
@@ -783,14 +664,11 @@ public class PingOneVerifyEvaluationNode implements Node {
 
 	@VisibleForTesting
 	String treeResumeUri(TreeContext context) throws NodeProcessException {
-		logger.error("++++++++++++++ Inside treeResumeUri ++++++++++++++");
 		// Get server URL
 		String serverUrl = context.request.serverUrl;
-		logger.error("treeResumeUri - serverUrl: {}", serverUrl);
 
 		// Get query parameters and add code
 		Map<String, List<String>> requestQueryParameters = context.request.parameters;
-		logger.error("treeResumeUri - requestQueryParameters: {}", requestQueryParameters);
 		Form redirectQuery = new Form();
 		redirectQuery.putAll(requestQueryParameters);
 		redirectQuery.put("code", Collections.singletonList(createRedirectCode(context)));
@@ -809,7 +687,6 @@ public class PingOneVerifyEvaluationNode implements Node {
 
 	@VisibleForTesting
 	AMIdentity getIdentity(TreeContext context) throws IdentityNotFoundException {
-		logger.error("++++++++++++++ Inside getIdentity ++++++++++++++");
 		return userHelper.getIdentity(context.getStateFor(this));
 	}
 

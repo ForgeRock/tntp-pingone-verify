@@ -2,7 +2,6 @@ package org.forgerock.am.tn.p1verify;
 
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
-import org.forgerock.json.JsonValue;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.*;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
@@ -67,7 +66,6 @@ public class PingOneDeleteUserNode extends AbstractDecisionNode {
     @Override
     public Action process(TreeContext context) {
         logger.debug("PingOneDeleteUserNode started.");
-        logger.error("Delete User - PingOneDeleteUserNode started.");
 
         NodeState nodeState = context.getStateFor(this);
 
@@ -77,8 +75,6 @@ public class PingOneDeleteUserNode extends AbstractDecisionNode {
                     ? nodeState.get(PINGONE_USER_ID_KEY).asString()
                     : null;
 
-            logger.error("Delete User - PingOne User ID: {}", pingOneUserId);
-
             if (StringUtils.isBlank(pingOneUserId)) {
                 return handleFailure(nodeState, FailureReason.MISSING_PINGONE_USER_ID, null);
             }
@@ -86,7 +82,6 @@ public class PingOneDeleteUserNode extends AbstractDecisionNode {
             // Retrieve PingOne access token
             String accessToken = TNTPPingOneUtility.getInstance().getAccessToken(realm, tntpPingOneConfig);
             if (StringUtils.isBlank(accessToken)) {
-                logger.error("Delete User - Unable to retrieve ACCESS_TOKEN.");
                 return handleFailure(nodeState, FailureReason.ACCESS_TOKEN, null);
             }
 
@@ -96,10 +91,8 @@ public class PingOneDeleteUserNode extends AbstractDecisionNode {
                     + "/v1/environments/" + tntpPingOneConfig.environmentId()
                     + "/users/" + pingOneUserId;
 
-            logger.error("Delete User - Request URI: {}", uri);
-
             // Perform the DELETE request
-            client.makeHTTPClientCall(accessToken, uri, "DELETE", JsonValue.json(JsonValue.object()));
+            client.makeHTTPClientCall(accessToken, uri, "DELETE", null);
             return goTo(true).build();
 
         } catch (Exception e) {

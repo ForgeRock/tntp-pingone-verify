@@ -86,29 +86,21 @@ public class VerifyTransactionsHelper {
     @Supported(scriptingApi = true, javaApi = false)
     public Map<String, Object> getLastVerifyTransaction() throws ScriptedVerifyTransactionsException {
         try {
-            logger.error("INSIDE METHOD - getLastVerifyTransaction");
             // Build the API endpoint URL.
             String uri = Constants.endpoint
                     + tntpPingOneConfig.environmentRegion().getDomainSuffix()
                     + "/v1/environments/" + tntpPingOneConfig.environmentId()
                     + "/users/" + pingOneUserId + "/verifyTransactions";
 
-            logger.error("LAST TRANSACTION URI: {}", uri);
-
             // Make the HTTP GET call.
             JsonValue response = client.makeHTTPClientCall(accessToken, uri, "GET", null);
-
-            logger.error("LAST TRANSACTION RESPONSE: {}", response);
 
             // Extract the _embedded object.
             JsonValue embedded = response.get("_embedded");
 
-            logger.error("LAST TRANSACTION _EMBEDDED: {}", embedded);
-
             if (embedded == null || !embedded.isDefined("verifyTransactions")) {
                 // No embedded transactions found; return an empty map.
                 logger.debug("No verify transactions found for user: {}", pingOneUserId);
-                logger.error("No verify transactions found for user: {}", pingOneUserId);
                 return Collections.emptyMap();
             }
 
@@ -119,11 +111,8 @@ public class VerifyTransactionsHelper {
                     .map(JsonValue::new)
                     .collect(Collectors.toList());
 
-            logger.error("LAST TRANSACTIONS LIST: {}", transactions);
-
             if (transactions.isEmpty()) {
                 logger.debug("Verify transactions list is empty for user: {}", pingOneUserId);
-                logger.error("Verify transactions list is empty for user: {}", pingOneUserId);
                 return Collections.emptyMap();
             }
 
@@ -144,9 +133,6 @@ public class VerifyTransactionsHelper {
 
             // Log the chosen transaction for debugging purposes.
             logger.debug("Selected last transaction for user {}: {}", pingOneUserId, lastTransaction);
-            logger.error("Selected last transaction for user {}: {}", pingOneUserId, lastTransaction);
-
-            logger.error("LEAVING METHOD - getLastVerifyTransaction");
 
             // Return the last transaction as a Map.
             return lastTransaction.asMap();
@@ -322,8 +308,8 @@ public class VerifyTransactionsHelper {
                     + "/users/" + pingOneUserId;
 
             // Convert the update data to JSON
-//            JsonValue requestBody = JsonValueBuilder.toJsonValue(JsonValueBuilder.getObjectMapper().writeValueAsString(body));
             JsonValue requestBody = (JsonValue) body;
+
             // Make the HTTP PUT call with the requestBody.
             JsonValue response = client.makeHTTPClientCall(accessToken, uri, "PUT", requestBody);
             return response.asMap();

@@ -1,0 +1,128 @@
+<!--
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services. Ping Identity Corporation only offers such software or services to legal entities who have entered into a binding license agreement with Ping Identity Corporation.
+ *
+ * Copyright 2024-2025 Ping Identity Corporation. All Rights Reserved
+-->
+
+# PingOne Verify Evaluation
+
+## Description
+
+The PingOne Verify Evaluation node initiates an identity verification transaction for the user in PingOne Verify. Based on the delivery method setting, the verification link is delivered via QR Code, Email, SMS, or instant Redirect.
+
+## Compatibility
+
+<table>
+  <colgroup>
+    <col>
+    <col>
+  </colgroup>
+  <thead>
+  <tr>
+    <th>Product</th>
+    <th>Compatible?</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td><p>ForgeRock Identity Cloud</p></td>
+    <td><p><span>Yes</span></p></td>
+  </tr>
+  <tr>
+    <td><p>ForgeRock Access Management (self-managed)</p></td>
+    <td><p><span>Yes</span></p></td>
+  </tr>
+  <tr>
+    <td><p>ForgeRock Identity Platform (self-managed)</p></td>
+    <td><p><span>Yes</span></p></td>
+  </tr>
+  </tbody>
+</table>
+
+## Inputs
+
+This node retrieves from the journey state:
+* **AM Username** – The user must exist in ForgeRock AM.
+* **PingOne User ID** – The corresponding user must also exist in PingOne.
+
+> Note: These values must reference the *same user* across both systems to ensure a valid identity verification.
+
+## Configuration
+
+<table>
+  <thead>
+  <th>Property</th>
+  <th>Usage</th>
+  </thead>
+
+  <tr>
+    <td>PingOne Service</td>
+    <td>Service for PingOne, PingOne DaVinci API, PingOne Protect nodes, and PingOne Verify nodes</td>
+  </tr>
+  <tr>
+    <td>PingOne Verify Policy ID</td>
+    <td>The ID of the PingOne Verify Policy.</td>
+  </tr>
+  <tr>
+    <td>Verify URL delivery mode</td>
+    <td>Specifies how the verification URL is delivered to the user: QR code, email, SMS, or redirect</td>
+  </tr>
+  <tr>
+    <td>Allow user to choose the URL delivery method</td>
+    <td>If enabled, the user is prompted to choose between QR Code, Email, SMS, Redirect. Does not apply if the delivery method is set to <code>Redirect</code></td>
+  </tr>
+  <tr>
+    <td>Delivery Method Message</td>
+    <td>The message to display to the user allowing them to choose the delivery method to receive the verify URL (QRCODE, SMS, EMAIL).</td>
+  </tr>
+  <tr>
+    <td>QR Code Message</td>
+    <td>The message with instructions to scan the QR code to begin the identity verification process.</td>
+  </tr>
+  <tr>
+    <td>Waiting Message</td>
+    <td>Localization overrides for the waiting message. This is a map of locale to message.</td>
+  </tr>
+  <tr>
+    <td>Redirect Message</td>
+    <td>The message to display to the user after the identity verification process is complete and the user is redirected back to the Journey.</td>
+  </tr>
+  <tr>
+    <td>Verify Transaction Timeout</td>
+    <td>The period of time (in seconds) to wait for a response to the Verify transaction. If no response is received during this time the node times out and the verification process fails.</td>
+  </tr>
+  <tr>
+    <td>Biographic Matching</td>
+    <td>Attributes from the user profile to compare with the data extracted from the government identity document provided by the client. If empty, no biographic matching verification is performed. Key is the biographic matching requirement. Value is the identity attribute name. Accepted biographic matching requirement keys: referenceSelfie, phone, email, given_name, family_name, name, address, and birth_date.</td>
+  </tr>
+  <tr>
+    <td>Store Verification Metadata</td>
+    <td>If enabled, verification metadata is stored in shared state</td>
+  </tr>
+  <tr>
+    <td>Store Verified Data</td>
+    <td>Store the list of verified data submitted by the user in the shared state under a key named <code>pingOneVerifyVerifiedData</code>.<br><br> <em>Note</em>: The key is empty if the node is unable to retrieve the verified data from PingOne.</td>
+  </tr>
+  <tr>
+    <td>Capture Failure</td>
+    <td>If selected, a failure is captured in shared state under a key named <code>pingOneVerifyEvaluationFailureReason</code> for use by subsequent nodes in the journey.</td>
+  </tr>
+
+</table>
+
+## Outputs
+
+This node places the following in shared state:
+
+* The PingOne Verify Transaction ID 
+* Verification decision metadata _(if enabled)_
+* Verified identity data _(if enabled)_
+* Captured failure reason _(if enabled)_
+
+## Outcomes
+
+`Success` The verification completed successfully.
+
+`Failure` There was an error or verification failed.
+
+`Time Out` The verification process timed out.

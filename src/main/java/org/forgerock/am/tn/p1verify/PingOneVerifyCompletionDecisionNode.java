@@ -14,27 +14,19 @@ import com.google.inject.assistedinject.Assisted;
 import org.forgerock.json.JsonValue;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.*;
-import org.forgerock.openam.auth.nodes.script.ActionWrapper;
 import org.forgerock.openam.core.realms.Realm;
-import org.forgerock.openam.scripting.domain.Script;
 import org.forgerock.openam.utils.StringUtils;
 import org.forgerock.util.i18n.PreferredLocales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import javax.script.SimpleBindings;
 import javax.inject.Inject;
-import javax.script.ScriptException;
 import java.util.List;
 import java.util.ResourceBundle;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonMap;
 import static org.forgerock.am.tn.p1verify.FailureReason.ACCESS_TOKEN;
 import static org.forgerock.am.tn.p1verify.FailureReason.UNEXPECTED_ERROR;
-import static org.forgerock.openam.auth.node.api.AuthScriptUtilities.*;
 import static org.forgerock.am.tn.p1verify.PingOneConstants.*;
 import static org.forgerock.am.tn.p1verify.PingOneVerifyEvaluationNode.OutcomeProvider.FAILURE_OUTCOME_ID;
 import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_TRANSACTION_STATUS;
@@ -42,6 +34,7 @@ import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_STATUS;
 import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_VERIFICATION_STATUS;
 import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_TRANSACTION_TIMED_OUT;
 import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_TRANSACTION_ID;
+
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValues;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
@@ -53,7 +46,7 @@ import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
 @Node.Metadata(
         outcomeProvider = PingOneVerifyCompletionDecisionNode.OutcomeProvider.class,
         configClass = PingOneVerifyCompletionDecisionNode.Config.class,
-        tags = {"marketplace", "trustnetwork" }
+        tags = {"marketplace", "trustnetwork"}
 )
 public class PingOneVerifyCompletionDecisionNode implements Node {
 
@@ -64,7 +57,6 @@ public class PingOneVerifyCompletionDecisionNode implements Node {
     private final TNTPPingOneConfig tntpPingOneConfig;
     private final Config config;
     private final Realm realm;
-    private final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 
     /**
      * Configuration for the node.
@@ -81,41 +73,11 @@ public class PingOneVerifyCompletionDecisionNode implements Node {
         }
 
         /**
-         * Use a Decision Node Script to filter the Verify Transactions to be evaluated.
-         *
-         * @return true to use Decision Node script, false to use last transaction.
-         */
-        @Attribute(order = 200)
-        default boolean useFilterScript() {
-            return false;
-        }
-
-        /**
-         * The script configuration.
-         *
-         * @return The script configuration.
-         */
-        @Attribute(order = 300)
-        default Script script() {
-            return Script.EMPTY_SCRIPT;
-        }
-
-        /**
-         * The script inputs configuration.
-         *
-         * @return The script inputs configuration.
-         */
-        @Attribute(order = 400)
-        default List<String> scriptInputs() {
-            return List.of(WILDCARD);
-        }
-
-        /**
          * If the node fail, the error detail will be provided in the shared state for analysis by later nodes.
          *
          * @return true if the failure will be captured.
          */
-        @Attribute(order = 500)
+        @Attribute(order = 200)
         default boolean captureFailure() {
             return false;
         }
@@ -124,8 +86,8 @@ public class PingOneVerifyCompletionDecisionNode implements Node {
     /**
      * The PingOne Verify Completion Decision node constructor.
      *
-     * @param config                 the node configuration.
-     * @param realm                  the realm.
+     * @param config the node configuration.
+     * @param realm  the realm.
      */
     @Inject
     PingOneVerifyCompletionDecisionNode(Helper client,
@@ -159,30 +121,19 @@ public class PingOneVerifyCompletionDecisionNode implements Node {
                 return handleFailure(nodeState, ACCESS_TOKEN, null);
             }
 
-            // Check if user filter script is enabled
-            if (config.useFilterScript()) {
-                logger.debug("Using script to filter transactions and return status.");
-                VerifyTransactionsHelper verifyTransactionsHelper = new VerifyTransactionsHelper(config, client, accessToken, pingOneUserId);
-                return executeScript(context, verifyTransactionsHelper);
-            } else {
-                // Get the last transaction status
-                logger.debug("Using last transaction status to determine the outcome.");
-                logger.error("Using last transaction status to determine the outcome.");
+            // Get the last transaction status
+            logger.debug("Using last transaction status to determine the outcome.");
 
-                VerifyTransactionsHelper helper = new VerifyTransactionsHelper(config, client, accessToken, pingOneUserId);
-                JsonValue lastTransaction = new JsonValue(helper.getLastVerifyTransaction());
+            VerifyTransactionsHelper helper = new VerifyTransactionsHelper(config, client, accessToken, pingOneUserId);
+            JsonValue lastTransaction = new JsonValue(helper.getLastVerifyTransaction());
 
-                logger.error("lastTransaction - JSON VALUE: {}", lastTransaction);
-//                logger.error("lastTransaction - TO STRING: {}", helper.getLastVerifyTransaction().toString());
+            if (lastTransaction.size() == 0) {
+                logger.debug("Unable to find any verify transaction for PingOne User ID: {}", pingOneUserId);
+                return Action.goTo(OutcomeProvider.NOT_STARTED_OUTCOME_ID).build();
+            }
 
-                if (lastTransaction.size() == 0) {
-                    logger.debug("Unable to find any verify transaction for PingOne User ID: {}", pingOneUserId);
-                    logger.error("Unable to find any verify transaction for PingOne User ID: {}", pingOneUserId);
-                    return Action.goTo(OutcomeProvider.NOT_STARTED_OUTCOME_ID).build();
-                }
-
-                String status = lastTransaction.get(RESPONSE_TRANSACTION_STATUS).get(RESPONSE_STATUS).asString();
-                switch (VerifyTransactionStatus.fromString(status)) {
+            String status = lastTransaction.get(RESPONSE_TRANSACTION_STATUS).get(RESPONSE_STATUS).asString();
+            switch (VerifyTransactionStatus.fromString(status)) {
                 case REQUESTED:
                 case PARTIAL:
                 case INITIATED:
@@ -203,56 +154,14 @@ public class PingOneVerifyCompletionDecisionNode implements Node {
                     }
                 default:
                     return handleFailure(nodeState, FailureReason.UNEXPECTED_VERIFY_STATUS, null);
-                }
             }
-        } catch (ScriptException e) {
-            return handleFailure(nodeState, FailureReason.VERIFY_COMPLETION_SCRIPT_ERROR, e);
         } catch (Exception e) {
             return handleFailure(nodeState, UNEXPECTED_ERROR, e);
         }
     }
 
-    private Action executeScript(TreeContext context, VerifyTransactionsHelper helper) throws ScriptException {
-        Script script = config.script();
-        String scriptText = script != null ? script.getScript() : null;
-
-        if (StringUtils.isBlank(scriptText)) {
-            throw new ScriptException("No script provided in the configuration.");
-        }
-
-        // Prepare bindings
-        SimpleBindings bindings = new SimpleBindings();
-        bindings.put("nodeState", context.getStateFor(this));
-        bindings.put("verifyTransactionsHelper", helper);
-
-        // Evaluate script
-        ScriptEngine engine = scriptEngineManager.getEngineByName("JavaScript");
-        if (engine == null) {
-            throw new ScriptException("No JavaScript engine available.");
-        }
-
-        engine.eval(scriptText, bindings);
-
-        // Support classic return mechanism
-        Object outcome = bindings.get(OUTCOME_IDENTIFIER); // "outcome"
-        ActionWrapper action = (ActionWrapper) bindings.get(ACTION); // "action"
-
-        if (action != null && !action.isEmpty()) {
-            return action.buildAction();
-        }
-
-        if (outcome instanceof String) {
-            String outcomeStr = (String) outcome;
-            return Action.goTo(outcomeStr).build();
-        }
-
-        throw new ScriptException("Script must set an 'outcome' (string) or 'action' (ActionWrapper).");
-    }
-
     private boolean isTransactionTimedOut(JsonValue lastTransaction) {
         JsonValue verificationStatus = lastTransaction.get(RESPONSE_TRANSACTION_STATUS).get(RESPONSE_VERIFICATION_STATUS);
-        logger.error("Verification Status: {}", verificationStatus);
-
         return verificationStatus.toString().contains(RESPONSE_TRANSACTION_TIMED_OUT);
     }
 
@@ -266,7 +175,7 @@ public class PingOneVerifyCompletionDecisionNode implements Node {
 
     @Override
     public OutputState[] getOutputs() {
-        return new OutputState[] {
+        return new OutputState[]{
                 new OutputState(PINGONE_VERIFY_TRANSACTION_ID_KEY, singletonMap(OutcomeProvider.NOT_COMPLETED_OUTCOME_ID, true)),
                 new OutputState(PINGONE_VERIFY_COMPLETION_FAILURE_REASON_KEY, singletonMap(FAILURE_OUTCOME_ID, true))
         };
@@ -274,12 +183,9 @@ public class PingOneVerifyCompletionDecisionNode implements Node {
 
     @Override
     public InputState[] getInputs() {
-        List<InputState> inputs = config.scriptInputs().stream()
-                .filter(StringUtils::isNotBlank)
-                .map(input -> new InputState(input, false))
-                .collect(Collectors.toList());
-        inputs.add(new InputState(PINGONE_USER_ID_KEY, true));
-        return inputs.toArray(new InputState[0]);
+        return new InputState[]{
+                new InputState(PINGONE_USER_ID_KEY, true)
+        };
     }
 
     /**
