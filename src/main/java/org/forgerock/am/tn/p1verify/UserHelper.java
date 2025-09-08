@@ -36,8 +36,8 @@ public class UserHelper {
     public static final String AM_FAMILY_NAME = "sn";
     public static final String AM_COMMON_NAME = "cn";
     public static final String AM_POSTAL_CODE = "postalCode";
-    public static final String AM_COUNTRY = "co";
     public static final String AM_STREET = "street";
+    public static final String AM_COUNTRY = "co";
     public static final String AM_CITY = "l";
     public static final String AM_STATE = "st";
     public static final String AM_PREFERRED_LANGUAGE = "preferredLanguage";
@@ -52,15 +52,18 @@ public class UserHelper {
      *
      * @param userIdentity The user's AM identity object.
      * @param attribute    The name of the attribute to retrieve.
+     *
      * @return The first value of the attribute, or null if not present.
      */
     public String getUserAttribute(AMIdentity userIdentity, String attribute) throws IdRepoException, SSOException {
 
         // Get all values for the requested attribute
         Set<String> attributes = userIdentity.getAttribute(attribute);
+        logger.error("getUserAttribute - Attributes Set: {}", attributes);
 
         // Return the first value if available
         if (CollectionUtils.isNotEmpty(attributes)) {
+            logger.error("getUserAttribute - Returning First Attribute: {}", attributes.iterator().next());
             return attributes.iterator().next();
         } else {
             // Log and return null if attribute is missing or empty
@@ -71,10 +74,12 @@ public class UserHelper {
 
     @Inject
     CoreWrapper coreWrapper;
+
     /**
      * Retrieves the AMIdentity object for a user based on username and realm in the node state.
      *
      * @param nodeState The current node state.
+     *
      * @return The user's AMIdentity object.
      */
     public AMIdentity getIdentity(NodeState nodeState) throws IdentityNotFoundException {
@@ -103,16 +108,16 @@ public class UserHelper {
     /**
      * Builds a full user creation request body for PingOne, using attributes from the AMIdentity.
      *
-     * @param amIdentity    The user's AM identity object.
-     * @param populationId  The PingOne population ID.
-     * @param amUserKey     The unique user key (usually username or uid).
+     * @param populationId    The PingOne population ID.
+     * @param pingOneUsername The unique user key (usually username or uid).
+     *
      * @return A JsonValue representing the full user creation request body.
      */
-    public JsonValue getFullRequestBody(AMIdentity amIdentity, String populationId, String amUserKey) throws JsonProcessingException, IdRepoException, SSOException {
+    public JsonValue getFullRequestBody(String populationId, String pingOneUsername, String email, String phone, String givenName, String familyName, String commonName, String street, String city, String state, String postalCode, String country, String preferredLanguage) throws JsonProcessingException, IdRepoException, SSOException {
 
         // Initialize request body and set username
         UserRequestBody requestBody = new UserRequestBody();
-        requestBody.setUsername(amUserKey);
+        requestBody.setUsername(pingOneUsername);
 
         // Set population ID if provided
         if (StringUtils.isNotEmpty(populationId)) {
@@ -120,37 +125,26 @@ public class UserHelper {
         }
 
         // Set email if available
-        String email = getUserAttribute(amIdentity, AM_EMAIL);
         if (StringUtils.isNotEmpty(email)) {
             requestBody.setEmail(email);
         }
 
         // Set primary phone number if available
-        String primaryPhone = getUserAttribute(amIdentity, AM_PHONE);
-        if (StringUtils.isNotEmpty(primaryPhone)) {
-            requestBody.setPrimaryPhone(primaryPhone);
+        if (StringUtils.isNotEmpty(phone)) {
+            requestBody.setPrimaryPhone(phone);
         }
 
         // Set name fields if any are present
-        String givenName = getUserAttribute(amIdentity, AM_GIVEN_NAME);
-        String familyName = getUserAttribute(amIdentity, AM_FAMILY_NAME);
-        String commonName = getUserAttribute(amIdentity, AM_COMMON_NAME);
         if (StringUtils.isNotEmpty(givenName) || StringUtils.isNotEmpty(familyName) || StringUtils.isNotEmpty(commonName)) {
             requestBody.setName(new UserRequestBody.Name(commonName, givenName, familyName));
         }
 
         // Set address fields if any are present
-        String street = getUserAttribute(amIdentity, AM_STREET);
-        String city = getUserAttribute(amIdentity, AM_CITY);
-        String state = getUserAttribute(amIdentity, AM_STATE);
-        String postalCode = getUserAttribute(amIdentity, AM_POSTAL_CODE);
-        String country = getUserAttribute(amIdentity, AM_COUNTRY);
         if (StringUtils.isNotEmpty(street) || StringUtils.isNotEmpty(city) || StringUtils.isNotEmpty(state) || StringUtils.isNotEmpty(postalCode) || StringUtils.isNotEmpty(country)) {
             requestBody.setAddress(new UserRequestBody.Address(street, city, state, postalCode, country));
         }
 
         // Set preferred language if available
-        String preferredLanguage = getUserAttribute(amIdentity, AM_PREFERRED_LANGUAGE);
         if (StringUtils.isNotEmpty(preferredLanguage)) {
             requestBody.setPreferredLanguage(preferredLanguage);
         }
@@ -162,24 +156,22 @@ public class UserHelper {
     /**
      * Builds a minimal PingOne user creation request body with anonymized data.
      *
-     * @param amIdentity   The user's AM identity object.
-     * @param populationId The PingOne population ID (optional).
-     * @param amUserKey    The value to use as the PingOne username.
+     * @param populationId      The PingOne population ID (optional).
+     * @param pingOneUsername   The value to use as the PingOne username.
+     * @param preferredLanguage The user's preferred language.
+     *
      * @return A JsonValue representing the request body.
      */
-    public JsonValue getAnonymizedRequestBody(AMIdentity amIdentity, String populationId, String amUserKey) throws JsonProcessingException, IdRepoException, SSOException {
+    public JsonValue getAnonymizedRequestBody(String populationId, String pingOneUsername, String preferredLanguage) throws JsonProcessingException, IdRepoException, SSOException {
 
         // Create a new user request body and set the username
         UserRequestBody requestBody = new UserRequestBody();
-        requestBody.setUsername(amUserKey);
+        requestBody.setUsername(pingOneUsername);
 
         // If population ID is provided, set it in the request body
         if (StringUtils.isNotEmpty(populationId)) {
             requestBody.setPopulation(new UserRequestBody.Population(populationId));
         }
-
-        // Retrieve the preferred language from the user's identity
-        String preferredLanguage = getUserAttribute(amIdentity, AM_PREFERRED_LANGUAGE);
 
         // If preferred language is available, include it in the request
         if (StringUtils.isNotEmpty(preferredLanguage)) {
@@ -194,6 +186,7 @@ public class UserHelper {
      * Extracts the PingOne user ID from the API response.
      *
      * @param response The PingOne API response.
+     *
      * @return The user ID as a string.
      */
     public String getUserIdFromResponse(JsonValue response) {
@@ -208,6 +201,7 @@ public class UserHelper {
      * Retrieves the number of users returned in the API response.
      *
      * @param response The PingOne API response.
+     *
      * @return The user count, or 0 if the response is null.
      */
     public int userCount(JsonValue response) {

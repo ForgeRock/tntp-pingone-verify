@@ -42,7 +42,8 @@ Creates a new user in PingOne using attributes from the local AM identity profil
 ## Inputs
 
 This node retrieves from the journey state:
-* **The UserName**
+* **AM Username (`username`)** – Required to create a new user in PingOne.
+* **Additional user attributes** – Depending on configuration, retrieves user attributes from either Shared State or the AM Identity user object. 
 
 ## Configuration
 
@@ -54,23 +55,27 @@ This node retrieves from the journey state:
 
   <tr>
     <td>PingOne Service</td>
-    <td>Service for PingOne, PingOne Verify, PingOne Protect *, and PingOne DaVinci API.</td>
+    <td>Service for PingOne, PingOne Verify, PingOne Protect, and PingOne DaVinci API.</td>
   </tr>
   <tr>
     <td>Population ID</td>
     <td>The unique identifier for the PingOne population. If not specified, the node uses the environment's default population.</td>
   </tr>
   <tr>
-    <td>Anonymized user</td>
-    <td>If enabled, the user is created with limited attributes (e.g., no name or contact details).</td>
+    <td>Anonymized PingOne User</td>
+    <td>If enabled, the user is created with minimal attributes (username and preferred language only).</td>
   </tr>
   <tr>
-    <td>AM identity attribute</td>
-    <td>The attribute of the existing AM identity object that will be used as key to identify the user in the PingOne directory server.</td>
+    <td>User Attributes from Shared State</td>
+    <td>If enabled, the node uses user attributes from shared state to build the PingOne user. If disabled, the node retrieves attributes from the AM identity profile.</td>
   </tr>
   <tr>
-    <td>Capture failure</td>
-    <td>If selected, a failure is captured in shared state under a key named <code>pingOneCreateUserFailureReason</code> for use by subsequent nodes in the journey.</td>
+    <td>AM Identity Attribute</td>
+    <td>The AM identity attribute (for example: <code>uid</code>, <code>mail</code>) used as the key to look up the user when building the PingOne user from an AM identity. Only applies if <code>User Attributes from Shared State</code> is disabled.</td>
+  </tr>
+  <tr>
+    <td>Capture Failure</td>
+    <td>If enabled, failure details are captured in shared state under the key <code>pingOneCreateUserFailureReason</code> for use by subsequent nodes in the journey.</td>
   </tr>
 
 </table>

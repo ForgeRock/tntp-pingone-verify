@@ -42,10 +42,13 @@ The PingOne Verify Evaluation node initiates an identity verification transactio
 ## Inputs
 
 This node retrieves from the journey state:
-* **AM Username** – The user must exist in ForgeRock AM.
-* **PingOne User ID** – The corresponding user must also exist in PingOne.
 
-> Note: These values must reference the *same user* across both systems to ensure a valid identity verification.
+* **AM Username (`username`)** – Required to resolve the desired AM identity.
+* **PingOne User ID (`pingOneUserId`)** – Required for starting a Verify transaction.
+  - If `Create PingOne User = true` and no ID is present, the node will create the PingOne user and store the new ID in shared state.
+  - If `Create PingOne User  = false`, the ID must already exist in shared state or the node will fail.
+
+> Note: These values must reference the *same user* across both systems to ensure a valid identity verification, unless the node is configured to create a PingOne user.
 
 ## Configuration
 
@@ -96,6 +99,26 @@ This node retrieves from the journey state:
     <td>Attributes from the user profile to compare with the data extracted from the government identity document provided by the client. If empty, no biographic matching verification is performed. Key is the biographic matching requirement. Value is the identity attribute name. Accepted biographic matching requirement keys: referenceSelfie, phone, email, given_name, family_name, name, address, and birth_date.</td>
   </tr>
   <tr>
+    <td>Create PingOne User</td>
+    <td>If enabled, the node will create a PingOne user if one does not already exist. If disabled, the node expects a PingOne user ID to be present in shared state.</td>
+  </tr>
+  <tr>
+    <td>Population ID</td>
+    <td>The unique identifier for the PingOne population. Used only if <code>Create PingOne User</code> is enabled. If not specified, the environment's default population is used.</td>
+  </tr>
+  <tr>
+    <td>Anonymized PingOne User</td>
+    <td>Whether to create an anonymized PingOne user. An anonymized user stores only minimal identifying information (username and preferred language). Used only if <code>Create PingOne User</code> is enabled.</td>
+  </tr>
+  <tr>
+    <td>User Attributes from Shared State</td>
+    <td>If enabled, the node uses user attributes from shared state instead of retrieving them from an AM identity. This affects PingOne user creation, delivery method attributes (EMAIL/SMS), and biographic matching. Typically, this option is only relevant when <code>Create PingOne User</code> is enabled.</td>
+  </tr>
+  <tr>
+    <td>AM Identity Attribute</td>
+    <td>The attribute of the existing AM identity object that will be used as the key to identify the user in the PingOne directory. Used only if <code>Create PingOne User</code> is enabled and <code>User Attributes from Shared State</code> is disabled.</td>
+  </tr>
+  <tr>
     <td>Store Verification Metadata</td>
     <td>If enabled, verification metadata is stored in shared state</td>
   </tr>
@@ -114,6 +137,7 @@ This node retrieves from the journey state:
 
 This node places the following in shared state:
 
+* The PingOne User ID
 * The PingOne Verify Transaction ID 
 * Verification decision metadata _(if enabled)_
 * Verified identity data _(if enabled)_

@@ -51,7 +51,7 @@ import com.google.common.collect.ImmutableMap;
  */
 public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "0.0.169";
+	static private String currentVersion = "0.0.182";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
 	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyPlugin.class);
 	private String loggerPrefix = "[PingOneVerifyPlugin]" + PingOneVerifyPlugin.logAppender;
@@ -77,7 +77,7 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
     /**
      * Handle plugin installation. This method will only be called once, on first AM startup once the plugin
      * is included in the classpath. The {@link #onStartup()} method will be called after this one.
-     *
+	 *
      * No need to implement this unless your AuthNode has specific requirements on install.
      */
 	@Override
