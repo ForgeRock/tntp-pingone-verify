@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.singletonMap;
+import static org.forgerock.am.tn.p1verify.Constants.OBJECT_ATTRIBUTES;
 import static org.forgerock.am.tn.p1verify.FailureReason.getFailureJson;
 import static org.forgerock.am.tn.p1verify.PingOneConstants.PINGONE_CREATE_USER_FAILURE_REASON_KEY;
 import static org.forgerock.am.tn.p1verify.PingOneConstants.PINGONE_USER_ID_KEY;
@@ -75,14 +76,14 @@ public class PingOneCreateUserNode extends AbstractDecisionNode {
         }
 
         /**
-         * Whether to build the PingOne user from shared state attributes instead of
+         * Whether to build the PingOne user from the shared state objectAttributes object instead of
          * retrieving attributes from an AM identity profile.
          * Only applies when {@code createPingOneUser} is enabled.
          *
          * @return true if attributes come from shared state, false otherwise.
          */
         @Attribute(order = 400)
-        default boolean userAttributesFromSharedState() {
+        default boolean userAttributesFromObjectAttributes() {
             return true;
         }
 
@@ -129,12 +130,14 @@ public class PingOneCreateUserNode extends AbstractDecisionNode {
         NodeState nodeState = context.getStateFor(this);
 
         try {
-            // Fail if username is not available in shared state
-            if (!nodeState.isDefined(USERNAME)) {
+            JsonValue attrs = requireObjectAttributes(nodeState);
+
+            // Requires USERNAME in shared state objectAttributes
+            if (!attrs.isDefined(USERNAME)) {
                 return handleFailure(nodeState, FailureReason.MISSING_USERNAME, null);
             }
 
-            String username = nodeState.get(USERNAME).asString();
+            String username = attrs.get(USERNAME).asString();
 
             // Retrieve an access token for PingOne API calls
             TNTPPingOneUtility utility = TNTPPingOneUtility.getInstance();
@@ -145,12 +148,11 @@ public class PingOneCreateUserNode extends AbstractDecisionNode {
 
             // Build the request payload depending on whether attributes come from shared state or AM identity
             PingOneUserRequestFactory.BuildResult build;
-            if (config.userAttributesFromSharedState()) {
-                build = PingOneUserRequestFactory.fromSharedState(
-                        nodeState,
+            if (config.userAttributesFromObjectAttributes()) {
+                build = PingOneUserRequestFactory.fromObjectAttributes(
+                        attrs,
                         config.anonymizedUser(),
                         config.populationId(),
-                        username,
                         userHelper
                 );
             } else {
@@ -159,8 +161,8 @@ public class PingOneCreateUserNode extends AbstractDecisionNode {
                 logger.debug("AMIdentity found: {} for user: {}.", amIdentity.getUniversalId(), username);
 
                 // Validate required attribute exists in AM identity
-                String pingOneUsername = userHelper.getUserAttribute(amIdentity, config.amIdentityAttribute());
-                if (StringUtils.isEmpty(pingOneUsername)) {
+                String amIdentityUsername = userHelper.getUserAttribute(amIdentity, config.amIdentityAttribute());
+                if (StringUtils.isEmpty(amIdentityUsername)) {
                     return handleFailure(nodeState, FailureReason.MISSING_ATTRIBUTE_FROM_PROFILE, null);
                 }
 
@@ -168,7 +170,7 @@ public class PingOneCreateUserNode extends AbstractDecisionNode {
                         amIdentity,
                         config.anonymizedUser(),
                         config.populationId(),
-                        pingOneUsername,
+                        amIdentityUsername,
                         userHelper
                 );
             }
@@ -197,6 +199,13 @@ public class PingOneCreateUserNode extends AbstractDecisionNode {
         }
     }
 
+    private JsonValue requireObjectAttributes(NodeState nodeState) throws NodeProcessException {
+        if (!nodeState.isDefined(OBJECT_ATTRIBUTES)) {
+            throw new NodeProcessException("Missing 'objectAttributes' in shared state.");
+        }
+        return nodeState.get(OBJECT_ATTRIBUTES);
+    }
+
     private Action handleFailure(NodeState nodeState, FailureReason reason, Exception e) {
         logger.error(reason.getMessage(), e);
         if (config.captureFailure()) {
@@ -214,6 +223,7 @@ public class PingOneCreateUserNode extends AbstractDecisionNode {
     public InputState[] getInputs() {
         return new InputState[] {
                 new InputState(USERNAME, true),
+                new InputState(OBJECT_ATTRIBUTES, false),
                 new InputState(AM_EMAIL, false),
                 new InputState(AM_PHONE, false),
                 new InputState(AM_GIVEN_NAME, false),

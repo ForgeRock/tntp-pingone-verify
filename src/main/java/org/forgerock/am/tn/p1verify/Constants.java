@@ -20,7 +20,6 @@ public class Constants {
 	public static final String RESPONSE_TRANSACTION_TIMED_OUT = "TRANSACTION_TIMED_OUT";
 	public static final String RESPONSE_VERIFIED_DATA = "verifiedData";
 
-
 	protected final static String ANY = "ANY";
 	protected final static String DRIVING_LICENSE = "DRIVING_LICENSE";
 	protected final static String PASSPORT = "PASSPORT";
@@ -105,7 +104,7 @@ public class Constants {
 	
 	protected final static String telephoneNumber = "telephoneNumber";
 	protected final static String mail = "mail";
-	protected final static String objectAttributes = "objectAttributes";
+	protected final static String OBJECT_ATTRIBUTES = "objectAttributes";
 
 	public static final String PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY = "pingOneVerifyRedirectFlowCode";
 	

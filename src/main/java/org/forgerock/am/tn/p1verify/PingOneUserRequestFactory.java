@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.forgerock.am.tn.p1verify.UserHelper.*;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
 /**
  * Utility for constructing PingOne user creation request bodies.
@@ -33,50 +34,52 @@ public final class PingOneUserRequestFactory {
     }
 
     /**
-     * Build the PingOne user creation request using attributes from the shared state (values passed through the journey).
+     * Build the PingOne user creation request using attributes from the shared state objectAttributes object
      */
-    public static BuildResult fromSharedState(
-            NodeState nodeState,
-            boolean anonymizedUser,
+    public static BuildResult fromObjectAttributes(
+            JsonValue objectAttributes,
+            boolean anonymizedPingOneUser,
             String populationId,
-            String sharedStateUsername,
             UserHelper userHelper) throws IdRepoException, SSOException, JsonProcessingException
     {
 
-        logger.error("+++++++++++ Inside fromSharedState method +++++++++++");
+        logger.error("+++++++++++ Inside fromObjectAttributes method +++++++++++");
+
+        // Retrieve username
+        String objectAttributesUsername = objectAttributes.get(USERNAME).asString();
+        logger.error("Object Attributes Username: {}", objectAttributesUsername);
 
         // Only populate minimal/anonymized fields
-        if (anonymizedUser) {
+        if (anonymizedPingOneUser) {
+            logger.error("fromObjectAttributes - anonymizedPingOneUser");
 
-            logger.error("fromSharedState - anonymizedUser");
-
-            String preferredLanguage = nodeState.get(AM_PREFERRED_LANGUAGE).asString();
+            String preferredLanguage = objectAttributes.get(AM_PREFERRED_LANGUAGE).asString();
             JsonValue requestBody = userHelper.getAnonymizedRequestBody(
                     populationId,
-                    sharedStateUsername,
+                    objectAttributesUsername,
                     preferredLanguage
             );
             return new BuildResult(requestBody);
         } else {
 
-            logger.error("fromSharedState - Full user details");
+            logger.error("fromObjectAttributes - Full user details");
 
             // Populate full user details from shared state
-            String email = nodeState.get(AM_EMAIL).asString();
-            String phone = nodeState.get(AM_PHONE).asString();
-            String givenName = nodeState.get(AM_GIVEN_NAME).asString();
-            String familyName = nodeState.get(AM_FAMILY_NAME).asString();
-            String commonName = nodeState.get(AM_COMMON_NAME).asString();
-            String street = nodeState.get(AM_STREET).asString();
-            String city = nodeState.get(AM_CITY).asString();
-            String state = nodeState.get(AM_STATE).asString();
-            String postalCode = nodeState.get(AM_POSTAL_CODE).asString();
-            String country = nodeState.get(AM_COUNTRY).asString();
-            String preferredLanguage = nodeState.get(AM_PREFERRED_LANGUAGE).asString();
+            String email = objectAttributes.get(AM_EMAIL).asString();
+            String phone = objectAttributes.get(AM_PHONE).asString();
+            String givenName = objectAttributes.get(AM_GIVEN_NAME).asString();
+            String familyName = objectAttributes.get(AM_FAMILY_NAME).asString();
+            String commonName = objectAttributes.get(AM_COMMON_NAME).asString();
+            String street = objectAttributes.get(AM_STREET).asString();
+            String city = objectAttributes.get(AM_CITY).asString();
+            String state = objectAttributes.get(AM_STATE).asString();
+            String postalCode = objectAttributes.get(AM_POSTAL_CODE).asString();
+            String country = objectAttributes.get(AM_COUNTRY).asString();
+            String preferredLanguage = objectAttributes.get(AM_PREFERRED_LANGUAGE).asString();
 
             JsonValue requestBody = userHelper.getFullRequestBody(
                     populationId,
-                    sharedStateUsername,
+                    objectAttributesUsername,
                     email,
                     phone,
                     givenName,
@@ -90,7 +93,7 @@ public final class PingOneUserRequestFactory {
                     preferredLanguage
             );
 
-            logger.error("Shared State request body: {}", requestBody);
+            logger.error("fromObjectAttributes - Request Body: {}", requestBody);
 
             return new BuildResult(requestBody);
         }
@@ -101,7 +104,7 @@ public final class PingOneUserRequestFactory {
      */
     public static BuildResult fromAmIdentity(
             AMIdentity amIdentity,
-            boolean anonymizedUser,
+            boolean anonymizedPingOneUser,
             String populationId,
             String amIdentityUsername,
             UserHelper userHelper) throws IdRepoException, SSOException, JsonProcessingException
@@ -110,9 +113,9 @@ public final class PingOneUserRequestFactory {
         logger.error("+++++++++++ Inside fromAmIdentity method +++++++++++");
 
         // Only populate minimal/anonymized fields
-        if (anonymizedUser) {
+        if (anonymizedPingOneUser) {
 
-            logger.error("fromAmIdentity - anonymizedUser");
+            logger.error("fromAmIdentity - anonymizedPingOneUser");
 
             String preferredLanguage = userHelper.getUserAttribute(amIdentity, AM_PREFERRED_LANGUAGE);
             JsonValue requestBody = userHelper.getAnonymizedRequestBody(
@@ -138,20 +141,21 @@ public final class PingOneUserRequestFactory {
             String country = userHelper.getUserAttribute(amIdentity, AM_COUNTRY);
             String preferredLanguage = userHelper.getUserAttribute(amIdentity, AM_PREFERRED_LANGUAGE);
 
-//            logger.error("[AM RAW] email             = {}", email);       // YES
-//            logger.error("[AM RAW] phone             = {}", phone);       // YES
-//            logger.error("[AM RAW] givenName         = {}", givenName);   // YES
-//            logger.error("[AM RAW] familyName        = {}", familyName);  // YES
-//            logger.error("[AM RAW] commonName        = {}", commonName);  // YES
-//            logger.error("[AM RAW] preferredLocale   = {}", userHelper.getUserAttribute(amIdentity, "preferredLocale"));  // NO
-//            logger.error("[AM RAW] city (l)          = {}", city);                                                        // NO
-//            logger.error("[AM RAW] city              = {}", userHelper.getUserAttribute(amIdentity, "city"));             // NO
-//            logger.error("[AM RAW] state             = {}", state);                                                       // NO
-//            logger.error("[AM RAW] stateProvince     = {}", userHelper.getUserAttribute(amIdentity, "stateProvince"));    // NO
-//            logger.error("[AM RAW] zip               = {}", userHelper.getUserAttribute(amIdentity, "zip"));              // NO
-//            logger.error("[AM RAW] country (co)      = {}", country);                                                     // NO
-//            logger.error("[AM RAW] country           = {}", userHelper.getUserAttribute(amIdentity, "country"));          // NO
-//            logger.error("[AM RAW] preferredLanguage = {}", preferredLanguage);                                           // NO
+            // ++++++ ATTRIBUTE KEY NAME TEST ++++++
+//            logger.error("[AM RAW] email             = {}", email);       // WORKS -> 'mail'
+//            logger.error("[AM RAW] phone             = {}", phone);       // WORKS -> 'telephoneNumber'
+//            logger.error("[AM RAW] givenName         = {}", givenName);   // WORKS -> 'givenName'
+//            logger.error("[AM RAW] familyName        = {}", familyName);  // WORKS -> 'sn'
+//            logger.error("[AM RAW] commonName        = {}", commonName);  // WORKS -> 'cn'
+//            logger.error("[AM RAW] preferredLocale   = {}", userHelper.getUserAttribute(amIdentity, "preferredLocale"));  // NOT FOUND
+//            logger.error("[AM RAW] city (l)          = {}", city);                                                        // NOT FOUND
+//            logger.error("[AM RAW] city              = {}", userHelper.getUserAttribute(amIdentity, "city"));             // NOT FOUND
+//            logger.error("[AM RAW] state             = {}", state);                                                       // NOT FOUND
+//            logger.error("[AM RAW] stateProvince     = {}", userHelper.getUserAttribute(amIdentity, "stateProvince"));    // NOT FOUND
+//            logger.error("[AM RAW] zip               = {}", userHelper.getUserAttribute(amIdentity, "zip"));              // NOT FOUND
+//            logger.error("[AM RAW] country (co)      = {}", country);                                                     // NOT FOUND
+//            logger.error("[AM RAW] country           = {}", userHelper.getUserAttribute(amIdentity, "country"));          // NOT FOUND
+//            logger.error("[AM RAW] preferredLanguage = {}", preferredLanguage);                                           // NOT FOUND
 
             JsonValue requestBody = userHelper.getFullRequestBody(
                     populationId,

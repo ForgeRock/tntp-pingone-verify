@@ -43,12 +43,29 @@ The PingOne Verify Evaluation node initiates an identity verification transactio
 
 This node retrieves from the journey state:
 
-* **AM Username (`username`)** – Required to resolve the desired AM identity.
-* **PingOne User ID (`pingOneUserId`)** – Required for starting a Verify transaction.
-  - If `Create PingOne User = true` and no ID is present, the node will create the PingOne user and store the new ID in shared state.
-  - If `Create PingOne User  = false`, the ID must already exist in shared state or the node will fail.
+* **PingOne User ID (`pingOneUserId`)**
+  * Required when `Create PingOne User = false`.
+  * Not required when `Create PingOne User = true` (the node will create a user and store the new user ID in shared state).
 
-> Note: These values must reference the *same user* across both systems to ensure a valid identity verification, unless the node is configured to create a PingOne user.
+
+* **AM Username (`username`)**
+  * Required in shared state, or `objectAttributes`, to resolve the desired AM identity.
+    * If `Create PingOne User = true` and `User Attributes from Object Attributes = false`:
+      * The PingOne user is created from the AM identity attributes of the corresponding `username`.
+    * If Delivery method is `EMAIL` or `SMS` and `User Attributes from Object Attributes = false` 
+      * Fetches `mail` or `telephoneNumber` from the AM Identity of the corresponding `username`.
+
+
+* **`objectAttributes`**
+  * Required when `User Attributes from Object Attributes = true`.
+  * Must at least include the following user attribute keys:
+    * `username` for user creation.
+    * `mail` if using the `EMAIL` delivery method.
+    * `telephoneNumber` if using the `SMS` delivery method.
+  * Include any other additional user attributes needed for the new PingOne user.
+
+
+> Note: All user attributes used within a single run must refer to the same end user. When the node creates the PingOne user, it writes that user’s ID to shared state so subsequent steps use the correct identity automatically.
 
 ## Configuration
 
@@ -95,10 +112,6 @@ This node retrieves from the journey state:
     <td>The period of time (in seconds) to wait for a response to the Verify transaction. If no response is received during this time the node times out and the verification process fails.</td>
   </tr>
   <tr>
-    <td>Biographic Matching</td>
-    <td>Attributes from the user profile to compare with the data extracted from the government identity document provided by the client. If empty, no biographic matching verification is performed. Key is the biographic matching requirement. Value is the identity attribute name. Accepted biographic matching requirement keys: referenceSelfie, phone, email, given_name, family_name, name, address, and birth_date.</td>
-  </tr>
-  <tr>
     <td>Create PingOne User</td>
     <td>If enabled, the node will create a PingOne user if one does not already exist. If disabled, the node expects a PingOne user ID to be present in shared state.</td>
   </tr>
@@ -111,12 +124,12 @@ This node retrieves from the journey state:
     <td>Whether to create an anonymized PingOne user. An anonymized user stores only minimal identifying information (username and preferred language). Used only if <code>Create PingOne User</code> is enabled.</td>
   </tr>
   <tr>
-    <td>User Attributes from Shared State</td>
-    <td>If enabled, the node uses user attributes from shared state instead of retrieving them from an AM identity. This affects PingOne user creation, delivery method attributes (EMAIL/SMS), and biographic matching. Typically, this option is only relevant when <code>Create PingOne User</code> is enabled.</td>
+    <td>User Attributes from Object Attributes</td>
+    <td>If enabled, the node retrieves user attributes from the shared state object <code>objectAttributes</code> instead of retrieving them from an AM identity. This affects PingOne user creation and delivery method attributes (EMAIL/SMS). Typically, this option is only relevant when <code>Create PingOne User</code> is enabled.</td>
   </tr>
   <tr>
     <td>AM Identity Attribute</td>
-    <td>The attribute of the existing AM identity object that will be used as the key to identify the user in the PingOne directory. Used only if <code>Create PingOne User</code> is enabled and <code>User Attributes from Shared State</code> is disabled.</td>
+    <td>The attribute of the existing AM identity object that will be used as the key to identify the user in the PingOne directory. Used only if <code>Create PingOne User</code> is enabled and <code>User Attributes from Object Attributes</code> is disabled.</td>
   </tr>
   <tr>
     <td>Store Verification Metadata</td>
