@@ -18,6 +18,7 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.ConfirmationCallback;
 import javax.security.auth.callback.TextOutputCallback;
 
+import org.apache.commons.lang.StringUtils;
 import org.forgerock.http.HttpApplicationException;
 import org.forgerock.http.handler.HttpClientHandler;
 import org.forgerock.http.header.AuthorizationHeader;
@@ -26,13 +27,11 @@ import org.forgerock.http.header.authorization.BearerToken;
 import org.forgerock.http.protocol.Request;
 import org.forgerock.http.protocol.Response;
 import org.forgerock.json.JsonValue;
-import org.forgerock.oauth2.core.AccessToken;
 import org.forgerock.openam.auth.node.api.Action;
 import org.forgerock.openam.auth.node.api.NodeState;
 import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
-import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
 import org.forgerock.openam.http.HttpConstants;
 import org.forgerock.openam.utils.qr.GenerationUtils;
@@ -42,13 +41,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
-import com.sun.identity.idm.AMIdentity;
 
 @Singleton
 public class Helper {
 	private final Logger logger = LoggerFactory.getLogger(Helper.class);
 	private final String loggerPrefix = "[PingOne Verify Helper]" + PingOneVerifyPlugin.logAppender;
-	//private AMIdentity identity = null;
 	private final HttpClientHandler handler;
 	
 	@Inject
@@ -86,9 +83,9 @@ public class Helper {
 
 		JsonValue theID = response.get("id");
 		if (theID.isNotNull() && theID.isString())
-			retVal = theID.asString();// hoping it's a string?
+			retVal = theID.asString();	// hoping it's a string?
 		else
-			retVal = theID.toString();// not good if here, because it probably looks like a key/val pair?
+			retVal = theID.toString();	// not good if here, because it probably looks like a key/val pair?
 
 		return retVal;
 	}
@@ -106,14 +103,21 @@ public class Helper {
 			Response response = handler.handle(new RootContext(), request).getOrThrow();
 
 			if (response.getStatus().isSuccessful()) {
-				return json(response.getEntity().getJson());
+				String responseBody = response.getEntity().getString();
+				if (StringUtils.isNotBlank(responseBody)) {
+					logger.error("HELPER METHOD - Response Body Detected");
+					return json(response.getEntity().getJson());
+				} else {
+					logger.error("HELPER METHOD - Response Body NOT Detected");
+					return JsonValue.json(JsonValue.object()); // return empty JSON
+				}
+//				return json(response.getEntity().getJson());
 			} else {
 				throw new Exception("PingOne Verify verifyTransaction response with error." + response.getStatus() + "-" + response.getEntity().getString());
 			}
 		} catch (Exception e) {
 			throw new Exception("Failed PingOne Verify", e);
 		}
-
 	}
 	
 	protected static boolean cancelPushed(TreeContext context, NodeState ns) {
@@ -159,8 +163,7 @@ public class Helper {
 		request.addHeaders(header);
 	}
 	
-	protected String getPingUID(NodeState ns, TNTPPingOneConfig tntpPingOneConfig, Realm realm, String uidAttrName, String pingUID) throws Exception{
-		
+	protected String getPingUID(NodeState ns, TNTPPingOneConfig tntpPingOneConfig, Realm realm, String uidAttrName, String pingUID) throws Exception {
         String theURI = Constants.endpoint + tntpPingOneConfig.environmentRegion().getDomainSuffix() + "/v1/environments/" + tntpPingOneConfig.environmentId() + "/users";
         TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
 		if (pingUID == null || pingUID.isBlank()) {

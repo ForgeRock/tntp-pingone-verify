@@ -15,7 +15,7 @@
     <artifactId>TNTPPingOneVerify</artifactId>
 
     <groupId>org.forgerock.am.tn</groupId>
-    <version>0.0.115</version>
+    <version>0.0.182</version>
     <name>PingOne Verify Nodes</name>
     <description>Nodes for PingOne Verify Integration</description>
 
@@ -97,6 +97,15 @@
             <version>${am.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.forgerock.am</groupId>
+            <artifactId>pingone-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.forgerock.am</groupId>
+            <artifactId>scripting-api</artifactId>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
     <repositories>
         <repository>
@@ -107,7 +116,7 @@
             <name>ForgeRock Private Release Repository</name>
             <url>https://maven.forgerock.org/repo/private-releases</url>
         </repository>
-	<repository>
+	    <repository>
             <snapshots>
                 <enabled>false</enabled>
             </snapshots>

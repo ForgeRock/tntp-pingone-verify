@@ -1,6 +1,6 @@
 /*
- * This code is to be used exclusively in connection with Ping Identity Corporation software or services. 
- * Ping Identity Corporation only offers such software or services to legal entities who have entered into 
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services.
+ * Ping Identity Corporation only offers such software or services to legal entities who have entered into
  * a binding license agreement with Ping Identity Corporation.
  *
  * Copyright 2024 Ping Identity Corporation. All Rights Reserved
@@ -11,7 +11,6 @@ package org.forgerock.am.tn.p1verify;
 import static java.util.Arrays.asList;
 
 import java.util.Map;
-
 import org.forgerock.openam.auth.node.api.AbstractNodeAmPlugin;
 import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.plugins.PluginException;
@@ -21,9 +20,9 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.ImmutableMap;
 
 /**
- * Definition of an <a href="https://backstage.forgerock.com/docs/am/6/apidocs/org/forgerock/openam/auth/node/api/AbstractNodeAmPlugin.html">AbstractNodeAmPlugin</a>. 
- * Implementations can use {@code @Inject} setters to get access to APIs 
- * available via Guice dependency injection. For example, if you want to add an SMS service on install, you 
+ * Definition of an <a href="https://backstage.forgerock.com/docs/am/6/apidocs/org/forgerock/openam/auth/node/api/AbstractNodeAmPlugin.html">AbstractNodeAmPlugin</a>.
+ * Implementations can use {@code @Inject} setters to get access to APIs
+ * available via Guice dependency injection. For example, if you want to add an SMS service on install, you
  * can add the following setter:
  * <pre><code>
  * {@code @Inject}
@@ -32,8 +31,8 @@ import com.google.common.collect.ImmutableMap;
  * }
  * </code></pre>
  * So that you can use the addSmsService api to load your schema XML for example.
- * PluginTools javadoc may be found 
- * <a href="https://backstage.forgerock.com/docs/am/6/apidocs/org/forgerock/openam/plugins/PluginTools.html#addSmsService-java.io.InputStream-">here</a> 
+ * PluginTools javadoc may be found
+ * <a href="https://backstage.forgerock.com/docs/am/6/apidocs/org/forgerock/openam/plugins/PluginTools.html#addSmsService-java.io.InputStream-">here</a>
  * <p>
  *     It can be assumed that when running, implementations of this class will be singleton instances.
  * </p>
@@ -52,12 +51,12 @@ import com.google.common.collect.ImmutableMap;
  */
 public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "0.0.115";
+	static private String currentVersion = "0.0.182";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
 	private final Logger logger = LoggerFactory.getLogger(PingOneVerifyPlugin.class);
 	private String loggerPrefix = "[PingOneVerifyPlugin]" + PingOneVerifyPlugin.logAppender;
-	
-    /** 
+
+    /**
      * Specify the Map of list of node classes that the plugin is providing. These will then be installed and
      *  registered at the appropriate times in plugin lifecycle.
      *
@@ -66,16 +65,19 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 	@Override
 	protected Map<String, Iterable<? extends Class<? extends Node>>> getNodesByVersion() {
 		return new ImmutableMap.Builder<String, Iterable<? extends Class<? extends Node>>>()
-                .put(currentVersion, asList(  
-                						PingOneVerifyAuthentication.class,
-                						PingOneVerifyProofing.class))
+                .put(currentVersion, asList(
+						PingOneVerifyEvaluationNode.class,
+						PingOneVerifyCompletionDecisionNode.class,
+						PingOneCreateUserNode.class,
+						PingOneDeleteUserNode.class,
+						PingOneIdentityMatchNode.class))
                 .build();
 	}
 
-    /** 
+    /**
      * Handle plugin installation. This method will only be called once, on first AM startup once the plugin
      * is included in the classpath. The {@link #onStartup()} method will be called after this one.
-     * 
+	 *
      * No need to implement this unless your AuthNode has specific requirements on install.
      */
 	@Override
@@ -83,41 +85,49 @@ public class PingOneVerifyPlugin extends AbstractNodeAmPlugin {
 		super.onInstall();
 	}
 
-    /** 
+    /**
      * Handle plugin startup. This method will be called every time AM starts, after {@link #onInstall()},
      * {@link #onAmUpgrade(String, String)} and {@link #upgrade(String)} have been called (if relevant).
-     * 
+     *
      * No need to implement this unless your AuthNode has specific requirements on startup.
      *
-     * @param startupType The type of startup that is taking place.
      */
 	@Override
 	public void onStartup() throws PluginException {
 		super.onStartup();
 	}
 
-    /** 
+    /**
      * This method will be called when the version returned by {@link #getPluginVersion()} is higher than the
      * version already installed. This method will be called before the {@link #onStartup()} method.
-     * 
-     * No need to implement this untils there are multiple versions of your auth node.
+     *
+     * No need to implement this until there are multiple versions of your auth node.
      *
      * @param fromVersion The old version of the plugin that has been installed.
-     */	
+     */
 	@Override
 	public void upgrade(String fromVersion) throws PluginException {
 		logger.error(loggerPrefix + "fromVersion = " + fromVersion);
 		logger.error(loggerPrefix + "currentVersion = " + currentVersion);
 		try {
-			pluginTools.upgradeAuthNode(PingOneVerifyAuthentication.class);
-			pluginTools.upgradeAuthNode(PingOneVerifyProofing.class);
+			logger.error("Registering PingOneVerifyEvaluationNode...");
+			pluginTools.upgradeAuthNode(PingOneVerifyEvaluationNode.class);
+			logger.error("Registering PingOneVerifyCompletionDecisionNode...");
+			pluginTools.upgradeAuthNode(PingOneVerifyCompletionDecisionNode.class);
+			logger.error("Registering PingOneCreateUserNode...");
+			pluginTools.upgradeAuthNode(PingOneCreateUserNode.class);
+			logger.error("Registering PingOneDeleteUserNode...");
+			pluginTools.upgradeAuthNode(PingOneDeleteUserNode.class);
+			logger.error("Registering PingOneIdentityMatchNode...");
+			pluginTools.upgradeAuthNode(PingOneIdentityMatchNode.class);
 		} catch (Exception e) {
+			logger.error("Upgrade failed for node: {}", e.getMessage(), e);
 			throw new PluginException(e.getMessage());
 		}
 		super.upgrade(fromVersion);
 	}
 
-    /** 
+    /**
      * The plugin version. This must be in semver (semantic version) format.
      *
      * @return The version of the plugin.
