@@ -8,7 +8,7 @@
 
 ## Description
 
-Creates a new user in PingOne using attributes from the local AM identity profile.
+Creates a new user in PingOne. User attributes can be sourced from either the AM identity profile (based on the AM username in shared state) or from the `objectAttributes` object in shared state.
 
 ## Compatibility
 
@@ -42,8 +42,19 @@ Creates a new user in PingOne using attributes from the local AM identity profil
 ## Inputs
 
 This node retrieves from the journey state:
-* **AM Username (`username`)** – Required to create a new user in PingOne.
-* **Additional user attributes** – Depending on configuration, retrieves user attributes from either Shared State or the AM Identity user object. 
+
+* **AM Username (`username`)**
+    * Required when building the PingOne user from the AM identity profile.
+      * Must exist either in shared state or in the `objectAttributes` object in shared state.
+
+
+* **`objectAttributes`**
+    * Required in shared state when `User Attributes from Object Attributes = true`.
+    * Must include at least `username`. 
+      * Additional attributes can be included to populate the PingOne user profile.
+
+Full list of available PingAM attributes:
+
 
 ## Configuration
 
@@ -66,12 +77,12 @@ This node retrieves from the journey state:
     <td>If enabled, the user is created with minimal attributes (username and preferred language only).</td>
   </tr>
   <tr>
-    <td>User Attributes from Shared State</td>
-    <td>If enabled, the node uses user attributes from shared state to build the PingOne user. If disabled, the node retrieves attributes from the AM identity profile.</td>
+    <td>User Attributes from Object Attributes</td>
+    <td>If enabled, the node retrieves user attributes from the shared state <code>objectAttributes</code> object to build the PingOne user. If disabled, the node retrieves attributes from the AM identity profile.</td>
   </tr>
   <tr>
     <td>AM Identity Attribute</td>
-    <td>The AM identity attribute (for example: <code>uid</code>, <code>mail</code>) used as the key to look up the user when building the PingOne user from an AM identity. Only applies if <code>User Attributes from Shared State</code> is disabled.</td>
+    <td>The AM identity attribute used as the key to look up the user when building the PingOne user from an AM identity. Only applies if <code>User Attributes from Object Attributes</code> is disabled.</td>
   </tr>
   <tr>
     <td>Capture Failure</td>
@@ -84,7 +95,7 @@ This node retrieves from the journey state:
 
 This node places the following in shared state:
 
-* The PingOne user ID under the key <code>pingOneUserId</code>
+* The PingOne User ID
 * Captured failure reason _(if enabled)_
 
 ## Outcomes

@@ -11,13 +11,13 @@ package org.forgerock.am.tn.p1verify;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.lang.String.format;
+import static org.forgerock.am.tn.p1verify.Constants.*;
 import static org.forgerock.am.tn.p1verify.UserHelper.*;
 import static org.forgerock.openam.auth.node.api.Action.goTo;
 import static org.forgerock.openam.auth.node.api.Action.send;
 import static org.forgerock.am.tn.p1verify.FailureReason.ACCESS_TOKEN;
 import static org.forgerock.am.tn.p1verify.FailureReason.IDENTITY_NOT_FOUND;
 import static org.forgerock.am.tn.p1verify.FailureReason.IDENTITY_VERIFICATION_FAILED;
-import static org.forgerock.am.tn.p1verify.FailureReason.INVALID_BIOGRAPHIC_MATCHING;
 import static org.forgerock.am.tn.p1verify.FailureReason.JSON_PROCESSING_ERROR;
 import static org.forgerock.am.tn.p1verify.FailureReason.MISSING_PINGONE_USER_ID_FROM_SHARED_STATE;
 import static org.forgerock.am.tn.p1verify.FailureReason.MISSING_PINGONE_VERIFY_TRANSACTION_ID;
@@ -39,11 +39,6 @@ import static org.forgerock.am.tn.p1verify.PingOneVerifyEvaluationNode.OutcomePr
 import static org.forgerock.am.tn.p1verify.PingOneVerifyEvaluationNode.OutcomeProvider.TIMEOUT_OUTCOME_ID;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
-import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_CODE;
-import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_STATUS;
-import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_TRANSACTION_ID;
-import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_TRANSACTION_STATUS;
-import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_URL;
 import static org.forgerock.openam.http.HttpConstants.Methods.GET;
 
 import java.net.URISyntaxException;
@@ -223,29 +218,12 @@ public class PingOneVerifyEvaluationNode implements Node {
 		}
 
 		/**
-		 * The Biographic Matching mapping. The Key is the requirement. The Value AM attribute name. If empty, no
-		 * Biographic Matching verification is performed.
-		 * Examples:
-		 * "name" -> "cn"
-		 * "email" -> "mail"
-		 * "phone" -> "telephoneNumber"
-		 * "given_name" -> "givenName"
-		 * "family_name" -> "sn"
-		 *
-		 * @return the mapping for the Biographic Matching.
-		 */
-		@Attribute(order = 1000)
-		default Map<String, String> biographicMatching() {
-			return Collections.emptyMap();
-		}
-
-		/**
 		 * Create a PingOne user if one does not already exist.
 		 * If disabled, the node expects a PingOne user ID to be provided in shared state.
 		 *
 		 * @return true if the node should create a PingOne user, false otherwise.
 		 */
-		@Attribute(order = 1100)
+		@Attribute(order = 1000)
 		default boolean createPingOneUser() {
 			return true;
 		}
@@ -256,7 +234,7 @@ public class PingOneVerifyEvaluationNode implements Node {
 		 *
 		 * @return the PingOne population ID.
 		 */
-		@Attribute(order = 1200)
+		@Attribute(order = 1100)
 		default String populationId() {
 			return "";
 		}
@@ -267,24 +245,23 @@ public class PingOneVerifyEvaluationNode implements Node {
 		 *
 		 * @return true if the created user should be anonymized, false otherwise.
 		 */
-		@Attribute(order = 1300)
-		default boolean anonymizedUser() {
+		@Attribute(order = 1200)
+		default boolean anonymizedPingOneUser() {
 			return true;
 		}
 
 		/**
-		 * Whether to source user attributes from shared state instead of
+		 * Whether to source user attributes from the shared state 'objectAttributes' object instead of
 		 * retrieving them from an AM identity profile.
 		 *
 		 * Affects:
 		 * - PingOne user creation (when createPingOneUser is enabled)
 		 * - Delivery method attributes (EMAIL, SMS) for Verify transactions
-		 * - Biographic matching attribute resolution
 		 *
-		 * @return true if attributes come from shared state, false otherwise.
+		 * @return true if attributes come from objectAttributes object in shared state, false otherwise.
 		 */
-		@Attribute(order = 1400)
-		default boolean userAttributesFromSharedState() {
+		@Attribute(order = 1300)
+		default boolean userAttributesFromObjectAttributes() {
 			return true;
 		}
 
@@ -295,7 +272,7 @@ public class PingOneVerifyEvaluationNode implements Node {
 		 *
 		 * @return the AM identity attribute to use as the lookup key.
 		 */
-		@Attribute(order = 1500)
+		@Attribute(order = 1400)
 		default String amIdentityAttribute() {
 			return DEFAULT_AM_IDENTITY_ATTRIBUTE; // = uid
 		}
@@ -305,7 +282,7 @@ public class PingOneVerifyEvaluationNode implements Node {
 		 *
 		 * @return true if the metadata should be stored, false otherwise.
 		 */
-		@Attribute(order = 1600)
+		@Attribute(order = 1500)
 		default boolean storeVerificationMetadata() {
 			return false;
 		}
@@ -315,7 +292,7 @@ public class PingOneVerifyEvaluationNode implements Node {
 		 *
 		 * @return true if the verified data should be stored, false otherwise.
 		 */
-		@Attribute(order = 1700)
+		@Attribute(order = 1600)
 		default boolean storeVerifiedData() {
 			return false;
 		}
@@ -325,7 +302,7 @@ public class PingOneVerifyEvaluationNode implements Node {
 		 *
 		 * @return true if the failure will be captured.
 		 */
-		@Attribute(order = 1800)
+		@Attribute(order = 1700)
 		default boolean captureFailure() {
 			return false;
 		}
@@ -444,8 +421,6 @@ public class PingOneVerifyEvaluationNode implements Node {
 			return handleFailure(nodeState, JSON_PROCESSING_ERROR, e);
 		} catch (IllegalStateException e) {
 			return handleFailure(nodeState, UNEXPECTED_VERIFY_STATUS, e);
-		} catch (IllegalArgumentException e) {
-			return handleFailure(nodeState, INVALID_BIOGRAPHIC_MATCHING, e);
 		} catch (Exception e) {
 			return handleFailure(nodeState, UNEXPECTED_ERROR, e);
 		}
@@ -495,24 +470,22 @@ public class PingOneVerifyEvaluationNode implements Node {
 		PingOneUserRequestFactory.BuildResult build;
 
 		// ----------------------------------------
-		// Create User w/ Shared State Attributes
+		// Create User w/ Shared State "objectAttributes"
 		// ----------------------------------------
-		if (config.userAttributesFromSharedState()) {
-			logger.error("Using attributes in shared state");
+		if (config.userAttributesFromObjectAttributes()) {
+			logger.error("Using objectAttributes object in shared state");
 
-			// Requires USERNAME in shared state
-			if (!nodeState.isDefined(USERNAME)) {
-				throw new NodeProcessException("Missing USERNAME in shared state for user creation.");
+			JsonValue attrs = requireObjectAttributes(nodeState);
+
+			// Requires USERNAME in shared state objectAttributes
+			if (!attrs.isDefined(USERNAME)) {
+				throw new NodeProcessException("Missing USERNAME in 'objectAttributes' for user creation.");
 			}
 
-			// Retrieve username
-			String sharedStateUsername = nodeState.get(USERNAME).asString();
-			logger.error("Shared State Username: {}", sharedStateUsername);
-			build = PingOneUserRequestFactory.fromSharedState(
-					nodeState,
-					config.anonymizedUser(),
+			build = PingOneUserRequestFactory.fromObjectAttributes(
+					attrs,
+					config.anonymizedPingOneUser(),
 					config.populationId(),
-					sharedStateUsername,
 					userHelper
 			);
 		} else {
@@ -533,7 +506,7 @@ public class PingOneVerifyEvaluationNode implements Node {
 			}
 			build = PingOneUserRequestFactory.fromAmIdentity(
 					amIdentity,
-					config.anonymizedUser(),
+					config.anonymizedPingOneUser(),
 					config.populationId(),
 					amIdentityUsername,
 					userHelper
@@ -552,6 +525,13 @@ public class PingOneVerifyEvaluationNode implements Node {
 		logger.debug("Created PingOne userId: {}", createdUserId);
 
 		return createdUserId;
+	}
+
+	private JsonValue requireObjectAttributes(NodeState nodeState) throws NodeProcessException {
+		if (!nodeState.isDefined(OBJECT_ATTRIBUTES)) {
+			throw new NodeProcessException("Missing 'objectAttributes' in shared state.");
+		}
+		return nodeState.get(OBJECT_ATTRIBUTES);
 	}
 
 	/**
@@ -746,7 +726,6 @@ public class PingOneVerifyEvaluationNode implements Node {
 	 *  1. Sets EMAIL/SMS notification targets from shared state or AM identity based on "userAttributesFromSharedState" and the chosen delivery method.
 	 * 	2. Always configures redirect back to the tree resume URI.
 	 * 	3. Optionally sets a Verify Policy ID.
-	 * 	4. Optionally sets biographic matching requirements, resolving attribute values from shared state or AM identity per configuration.
 	 *
 	 * @param context the current tree context
 	 * @param deliveryMethod the chosen delivery method
@@ -756,16 +735,15 @@ public class PingOneVerifyEvaluationNode implements Node {
 	 * @throws JsonProcessingException if serialization fails
 	 * @throws IdRepoException if AM identity access fails (when used)
 	 * @throws SSOException if AM identity access fails (when used)
-	 * @throws IllegalArgumentException for unknown biographic matching keys
 	 * @throws IdentityNotFoundException if AM identity cannot be resolved (when used)
 	 * @throws NodeProcessException when required delivery attributes are missing
 	 */
-	private JsonValue getRequestBody(TreeContext context, DeliveryMethod deliveryMethod) throws JsonProcessingException, IdRepoException, SSOException, IllegalArgumentException, IdentityNotFoundException, NodeProcessException {
+	private JsonValue getRequestBody(TreeContext context, DeliveryMethod deliveryMethod) throws JsonProcessingException, IdRepoException, SSOException, IdentityNotFoundException, NodeProcessException {
 		VerifyRequestBody requestBody = new VerifyRequestBody();
 		NodeState nodeState = context.getStateFor(this);
 
-		// Config toggle: true = use attributes from shared state, false = use AM identity profile
-		boolean useShared = config.userAttributesFromSharedState();
+		boolean useObjectAttrs = config.userAttributesFromObjectAttributes();
+		JsonValue attrs = useObjectAttrs ? requireObjectAttributes(nodeState) : null;
 
 		// AMIdentity will only be resolved if needed
 		AMIdentity amIdentity = null;
@@ -778,10 +756,10 @@ public class PingOneVerifyEvaluationNode implements Node {
 			String email = null;
 			String phone = null;
 
-			if (useShared) {
+			if (useObjectAttrs) {
 				// Pull contact info directly from shared state
-				email = nodeState.get(AM_EMAIL).asString();
-				phone = nodeState.get(AM_PHONE).asString();
+				email = attrs.get(AM_EMAIL).asString();
+				phone = attrs.get(AM_PHONE).asString();
 			} else {
 				// Fall back to AM identity attributes
 				amIdentity = getIdentity(context);
@@ -821,64 +799,6 @@ public class PingOneVerifyEvaluationNode implements Node {
 			requestBody.setVerifyPolicy(new VerifyRequestBody.VerifyPolicy(config.verifyPolicyId()));
 		}
 
-		// -------------------------
-		// Biographic Matching
-		// -------------------------
-		// Compares user-supplied identity attributes against those stored in AM or Shared State
-		if (!config.biographicMatching().isEmpty()) {
-			VerifyRequestBody.Requirements.Builder requirementsBuilder = new VerifyRequestBody.Requirements.Builder();
-			for (Map.Entry<String, String> entry : config.biographicMatching().entrySet()) {
-				String requirementKey = entry.getKey();
-				String attributeKey   = entry.getValue();
-
-				// Resolve the attribute value based on configuration
-				String value;
-				if (useShared) {
-					value = nodeState.get(attributeKey).asString();
-				} else {
-					if (amIdentity == null) {
-						amIdentity = getIdentity(context);
-					}
-					value = userHelper.getUserAttribute(amIdentity, attributeKey);
-				}
-
-				// Skip empty fields
-				if (StringUtils.isEmpty(value)) {
-					continue;
-				}
-
-				// Map requirement type to VerifyRequestBody
-				switch (BiographicMatchingRequirement.fromString(requirementKey)) {
-					case REFERENCE_SELFIE:
-						requirementsBuilder.setReferenceSelfie(new VerifyRequestBody.Value(value));
-						break;
-					case PHONE:
-						requirementsBuilder.setPhone(new VerifyRequestBody.Value(value));
-						break;
-					case FAMILY_NAME:
-						requirementsBuilder.setFamilyName(new VerifyRequestBody.Value(value));
-						break;
-					case NAME:
-						requirementsBuilder.setName(new VerifyRequestBody.Value(value));
-						break;
-					case BIRTH_DATE:
-						requirementsBuilder.setBirthDate(new VerifyRequestBody.Value(value));
-						break;
-					case EMAIL:
-						requirementsBuilder.setEmail(new VerifyRequestBody.Options(value));
-						break;
-					case GIVEN_NAME:
-						requirementsBuilder.setGivenName(new VerifyRequestBody.Options(value));
-						break;
-					case ADDRESS:
-						requirementsBuilder.setAddress(new VerifyRequestBody.Options(value));
-						break;
-					default:
-						throw new IllegalArgumentException("Unexpected biographic matching key: " + requirementKey);
-				}
-			}
-			requestBody.setRequirements(requirementsBuilder.build());
-		}
 		// Convert the VerifyRequestBody into JSON for the PingOne API
 		return JsonValueBuilder.toJsonValue(JsonValueBuilder.getObjectMapper().writeValueAsString(requestBody));
 	}
@@ -1081,6 +1001,7 @@ public class PingOneVerifyEvaluationNode implements Node {
 		return new InputState[] {
 				new InputState(PINGONE_USER_ID_KEY, true),
 				new InputState(USERNAME, true),
+				new InputState(OBJECT_ATTRIBUTES, false),
 				new InputState(AM_EMAIL, false),
 				new InputState(AM_PHONE, false),
 				new InputState(AM_GIVEN_NAME, false),

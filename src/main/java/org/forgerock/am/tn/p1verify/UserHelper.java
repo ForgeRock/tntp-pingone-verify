@@ -1,7 +1,10 @@
 
 package org.forgerock.am.tn.p1verify;
 
+import static org.forgerock.am.tn.p1verify.Constants.OBJECT_ATTRIBUTES;
 import static org.forgerock.am.tn.p1verify.Constants.RESPONSE_EMBEDDED;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
 import java.util.Set;
 
@@ -36,7 +39,7 @@ public class UserHelper {
     public static final String AM_FAMILY_NAME = "sn";
     public static final String AM_COMMON_NAME = "cn";
     public static final String AM_POSTAL_CODE = "postalCode";
-    public static final String AM_STREET = "street";
+    public static final String AM_STREET = "postalAddress"; // "street";
     public static final String AM_COUNTRY = "co";
     public static final String AM_CITY = "l";
     public static final String AM_STATE = "st";
@@ -84,24 +87,36 @@ public class UserHelper {
      */
     public AMIdentity getIdentity(NodeState nodeState) throws IdentityNotFoundException {
 
-        // Extract username and realm from node state; default realm to "/"
-        String username = nodeState.isDefined("username") ? nodeState.get("username").asString() : null;
-        String realm = nodeState.isDefined("realm") ? nodeState.get("realm").asString() : "/";
+        // Extract username from node state; if username not found in shared state, fallback to objectAttributes
+        String username = null;
+
+        if (nodeState.isDefined(USERNAME)) {
+            username = nodeState.get(USERNAME).asString();
+
+        } else if (nodeState.isDefined(OBJECT_ATTRIBUTES)) {
+            JsonValue attrs = nodeState.get(OBJECT_ATTRIBUTES);
+
+            if (attrs != null && attrs.isDefined(USERNAME)) {
+                username = attrs.get(USERNAME).asString();
+                logger.debug("Resolved username from objectAttributes.USERNAME fallback");
+            }
+        }
+
+        // Extract realm from node state; default realm to "/"
+        String realm = nodeState.isDefined(REALM) ? nodeState.get(REALM).asString() : "/";
 
         // Throw if username is not present
         if (StringUtils.isBlank(username)) {
-            throw new IdentityNotFoundException("Username not present in node state.");
+            throw new IdentityNotFoundException("Username not present (expected 'username' in shared state or objectAttributes).");
         }
 
-        // Attempt to retrieve the user's AMIdentity using CoreWrapper
+        // Retrieve the user's AMIdentity using CoreWrapper
         AMIdentity identity = coreWrapper.getIdentityOrElseSearchUsingAuthNUserAlias(username, realm);
 
-        // Throw if identity could not be found
         if (identity == null) {
             throw new IdentityNotFoundException("Identity not found for username: " + username + " in realm: " + realm);
         }
 
-        // Return the found identity
         return identity;
     }
 
