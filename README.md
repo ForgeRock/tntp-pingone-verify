@@ -6,6 +6,7 @@
 
 # PingOne Verify
 
+**Note:** This integration is **deprecated** for AM 8.0.0+ and will no longer receive updates or new feature enhancements.
 This integration provides administrators with the ability to perform secure identity verification using PingOne Verify in authentication journeys. The supported verification types include:
 
 * Government ID
