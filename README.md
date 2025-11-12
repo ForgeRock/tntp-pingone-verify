@@ -10,13 +10,11 @@
 >
 > This marketplace node is **deprecated** as of PingAM 7.5.0.
 >
-> Customers wishing to integrate with PingOne Protect in PingAM \> 7.5.0 are strongly encouraged to use the officially provided engineering nodes for this.
+> Customers wishing to integrate with PingOne Verify in PingAM \> 7.5.0 are strongly encouraged to use the officially provided engineering nodes for this.
 >
 > Please refer to the following documentation for up-to-date information on these nodes and associated services:
-> - [Getting Started with PingOne Protect](https://docs.pingidentity.com/pingone/threat_protection_using_pingone_protect/p1_protect_getting_started.html)
-> - [PingOne Protect Initialize Node](https://docs.pingidentity.com/bundle/pingone-protect/page/p1p-init-node.html)
-> - [PingOne Protect Evaluation Node](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-protect-evaluation.html)
-> - [PingOne Protect Result Node](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-protect-result.html)
+> - [PingOne Verify Completion Decision Node]([https://docs.pingidentity.com/bundle/pingone-protect/page/p1p-init-node.html](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-verify-completion-decision.html))
+> - [PingOne Verify Evaluation Node]([https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-protect-evaluation.html](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-verify-evaluation.html))
 >
 
 This integration provides administrators with the ability to perform secure identity verification using PingOne Verify in authentication journeys. The supported verification types include:
