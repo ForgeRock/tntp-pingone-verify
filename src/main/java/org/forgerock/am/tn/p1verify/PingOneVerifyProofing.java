@@ -183,7 +183,12 @@ public class PingOneVerifyProofing implements Node {
 			return "Redirecting back to PingOne AIC.";
 		}
 
-		@Attribute(order = 1400)
+        @Attribute(order = 1375)
+        default String staticRedirectUrl() {
+            return "";
+        }
+
+        @Attribute(order = 1400)
 		default boolean saveVerifiedClaims() {
 			return false;
 		}
@@ -276,7 +281,12 @@ public class PingOneVerifyProofing implements Node {
 				// Setting PingOne Verify redirect callback url
 				if (userChoice == Constants.redirectNum) {
 					JsonValue redirect = new JsonValue(new LinkedHashMap<String, Object>(1));
-					String redirectUri = getRedirectUri(context);
+                    String redirectUri = "";
+                    if (config.staticRedirectUrl() != null && !config.staticRedirectUrl().isEmpty()) {
+                        redirectUri = config.staticRedirectUrl();
+                    } else {
+                        redirectUri = getRedirectUri(context);
+                    }
 					redirect.put("url", redirectUri);
 					redirect.put("message", config.redirectMessage());
 					body.put("redirect", redirect);
