@@ -283,7 +283,7 @@ public class PingOneVerifyProofing implements Node {
 					JsonValue redirect = new JsonValue(new LinkedHashMap<String, Object>(1));
                     String redirectUri = "";
                     if (config.staticRedirectUrl() != null && !config.staticRedirectUrl().isEmpty()) {
-                        redirectUri = config.staticRedirectUrl();
+                        redirectUri = getRedirectUriStatic(context, config.staticRedirectUrl());
                     } else {
                         redirectUri = getRedirectUri(context);
                     }
@@ -422,6 +422,33 @@ public class PingOneVerifyProofing implements Node {
 
 		return resumeUri.toASCIIString();
 	}
+
+    String getRedirectUriStatic(TreeContext context, String staticRedirectUrl) throws NodeProcessException {
+        // Get server URL
+        String serverUrl = staticRedirectUrl;
+
+        // Get query parameters and add code
+        Map<String, List<String>> requestQueryParameters = context.request.parameters;
+        Form redirectQuery = new Form();
+        redirectQuery.putAll(requestQueryParameters);
+
+        NodeState nodeState = context.getStateFor(this);
+        String code = UUID.randomUUID().toString();
+        nodeState.putShared(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY, code);
+        redirectQuery.put("code", Collections.singletonList(code));
+
+        // Create resume URI
+        MutableUri resumeUri;
+        try {
+            resumeUri = new MutableUri(serverUrl);
+            resumeUri.setPath(resumeUri.getPath());
+            resumeUri.setRawQuery(redirectQuery.toQueryString());
+        } catch (URISyntaxException e) {
+            throw new NodeProcessException(String.format("Failed to create resume URI for server '%s'", staticRedirectUrl));
+        }
+
+        return resumeUri.toASCIIString();
+    }
 
 	private JsonValue getInitBody(String policyId, String telephoneNumber, String emailAddress, TreeContext context) throws Exception{
 
