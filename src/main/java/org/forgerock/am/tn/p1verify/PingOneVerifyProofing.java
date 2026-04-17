@@ -437,6 +437,11 @@ public class PingOneVerifyProofing implements Node {
         nodeState.putShared(PINGONE_VERIFY_REDIRECT_FLOW_CODE_KEY, code);
         redirectQuery.put("code", Collections.singletonList(code));
 
+        String state = UUID.randomUUID().toString();
+        nodeState.putShared("state", state); 
+        redirectQuery.put("state", Collections.singletonList(state));
+
+
         // Create resume URI
         MutableUri resumeUri;
         try {
